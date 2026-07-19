@@ -330,13 +330,27 @@ elif page == "🎯 Score prédictif":
 # ==========================================
 # PAGE 6: Recherche
 # ==========================================
-elif page == "🔍 Recherche cheval":
-    st.header("🔍 Recherche un cheval")
+elif page == " Recherche cheval":
+    st.header(" Recherche un cheval")
     search = st.text_input("Nom du cheval :")
     if search:
+        # DEBUG : Affiche les infos
+        st.write(f"📊 Total lignes dans df: {len(df)}")
+        st.write(f"📋 Colonnes disponibles: {list(df.columns)}")
+        
         results = df[df["Cheval"].str.contains(search, case=False, na=False)]
+        
+        st.write(f"🔍 Résultats trouvés: {len(results)}")
+        
         if not results.empty:
             st.dataframe(results[["Date", "Hippo", "Cheval", "Classement", "Cote"]].head(20), use_container_width=True)
+        else:
+            st.warning(" Aucun résultat. Essayons une recherche partielle...")
+            # Recherche alternative
+            results_partiel = df[df["Cheval"].str.upper().str.contains(search.upper(), na=False)]
+            if not results_partiel.empty:
+                st.success(f"✅ Trouvé {len(results_partiel)} résultats avec recherche partielle")
+                st.dataframe(results_partiel[["Date", "Hippo", "Cheval"]].head(10))
 
 st.markdown("---")
 st.markdown("<div style='text-align:center;color:gray;font-size:12px'>🏇 Galop Analyzer</div>", unsafe_allow_html=True)
