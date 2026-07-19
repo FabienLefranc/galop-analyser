@@ -13,6 +13,7 @@ URL_COURSES_JOUR = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQJugx0HS5vI
 @st.cache_data(ttl=60)
 def load_data():
     try:
+        # On force la lecture de la Cote en TEXTE pour éviter les bugs de virgules
         df_historique = pd.read_csv(URL_CSV, on_bad_lines='skip', dtype={'Date': str, 'Cote': str})
         st.sidebar.success(f"✅ Historique: {len(df_historique)} lignes")
         try:
@@ -31,13 +32,17 @@ def load_data():
             if col in df.columns:
                 df[col] = df[col].astype(str).str.strip()
         
-        # ️ CORRECTION CRUCIALE POUR LES COTES (à faire AVANT conversion en nombre)
+        # 🛠️ CORRECTION AGRESSIVE DES COTES
         if 'Cote' in df.columns:
-            # Remplacer virgules par points et supprimer guillemets
-            df['Cote'] = df['Cote'].astype(str).str.replace(',', '.', regex=False).str.replace('"', '')
-            # Convertir en nombre
+            # 1. On s'assure que c'est du texte
+            df['Cote'] = df['Cote'].astype(str)
+            # 2. On enlève les guillemets et les espaces
+            df['Cote'] = df['Cote'].str.replace('"', '', regex=False).str.strip()
+            # 3. On remplace la virgule par un point
+            df['Cote'] = df['Cote'].str.replace(',', '.', regex=False)
+            # 4. On convertit en nombre décimal (float). Les erreurs deviennent 0.0
             df['Cote'] = pd.to_numeric(df['Cote'], errors='coerce').fillna(0.0)
-            st.sidebar.success(f"✅ Cotes corrigées (moyenne: {df['Cote'].mean():.2f})")
+            st.sidebar.success(f"✅ Cotes corrigées (Moyenne: {df['Cote'].mean():.2f})")
         
         # Conversion des autres nombres entiers
         for col in ['Dist', 'Nb_Partants', 'Num_PMU', 'Âge', 'Poids', 'Corde', 'Classement', 'Gains_Car', 'Réu', 'Course']:
@@ -50,21 +55,19 @@ def load_data():
         return None
 
 def nettoyer_nom(nom):
-    """Enlève les espaces, les points et met en majuscules pour comparer les noms sans bug"""
     if pd.isna(nom): return ""
     return re.sub(r'[\s\.]', '', str(nom)).upper()
 
 def calculer_score_ameliore(row, df_global, df_course):
     score = 0
     cheval_nom = nettoyer_nom(row.get('Cheval', ''))
-    dist_actuelle = row.get('Dist', 0)
+    dist_actuelle = float(row.get('Dist', 0))
     jockey_actuel = nettoyer_nom(row.get('Jockey', ''))
     entraineur_actuel = nettoyer_nom(row.get('Entraîneur', ''))
     
-    # Récupérer tout l'historique de ce cheval
     hist_cheval = df_global[df_global['Cheval'].apply(nettoyer_nom) == cheval_nom]
     
-    # 1. FORME RÉCENTE (20 pts)
+    # 1. FORME (20 pts)
     musique = str(row.get('Musique', ''))
     chiffres = re.findall(r'\d+', musique)
     if chiffres:
@@ -80,7 +83,7 @@ def calculer_score_ameliore(row, df_global, df_course):
     else:
         score += 10 
 
-    # 2. COUPLE JOCKEY / ENTRAÎNEUR (25 pts)
+    # 2. JOCKEY / ENTRAÎNEUR (25 pts)
     if jockey_actuel != "":
         victoires_jockey = len(hist_cheval[
             (hist_cheval['Jockey'].apply(nettoyer_nom) == jockey_actuel) & 
@@ -95,7 +98,7 @@ def calculer_score_ameliore(row, df_global, df_course):
         ])
         score += min(12.5, victoires_entraineur * 5)
 
-    # 3. AFFINITÉ DISTANCE (15 pts)
+    # 3. DISTANCE (15 pts)
     dist_min = dist_actuelle - 200
     dist_max = dist_actuelle + 200
     hist_distance = hist_cheval[(hist_cheval['Dist'] >= dist_min) & (hist_cheval['Dist'] <= dist_max)]
@@ -103,19 +106,19 @@ def calculer_score_ameliore(row, df_global, df_course):
     podiums_dist = len(hist_distance[(hist_distance['Classement'] >= 1) & (hist_distance['Classement'] <= 3)])
     score += min(15, (victoires_dist * 10) + (podiums_dist * 3))
 
-    # 4. GAINS CARRIÈRE (15 pts)
-    gains = row.get('Gains_Car', 0)
+    # 4. GAINS (15 pts)
+    gains = float(row.get('Gains_Car', 0))
     gains_max = df_course['Gains_Car'].max() if 'Gains_Car' in df_course.columns else 0
-    if pd.notna(gains) and gains > 0 and pd.notna(gains_max) and gains_max > 0:
+    if gains > 0 and gains_max > 0:
         score_gains = min(100, (gains / gains_max) * 100)
         score += (score_gains / 100) * 15
     else:
         score += 7.5
 
     # 5. POIDS (10 pts)
-    poids = row.get('Poids', 0)
+    poids = float(row.get('Poids', 0))
     poids_moyen = df_course['Poids'].mean() if 'Poids' in df_course.columns else 0
-    if pd.notna(poids) and poids > 0 and pd.notna(poids_moyen) and poids_moyen > 0:
+    if poids > 0 and poids_moyen > 0:
         ecart = poids_moyen - poids
         score_poids = max(0, min(100, 50 + (ecart * 5)))
         score += (score_poids / 100) * 10
@@ -123,18 +126,18 @@ def calculer_score_ameliore(row, df_global, df_course):
         score += 5
 
     # 6. CORDE (10 pts)
-    corde = row.get('Corde', 0)
-    nb_partants = row.get('Nb_Partants', 16)
-    if pd.notna(corde) and corde > 0 and pd.notna(nb_partants) and nb_partants > 0:
+    corde = float(row.get('Corde', 0))
+    nb_partants = float(row.get('Nb_Partants', 16))
+    if corde > 0 and nb_partants > 0:
         if corde <= nb_partants / 3: score += 10
         elif corde <= nb_partants * 2 / 3: score += 6
         else: score += 3
     else:
         score += 5
 
-    # 7. COTE (5 pts)
-    cote = row.get('Cote', 0.0)
-    if pd.notna(cote) and cote > 0:
+    # 7. COTE (5 pts) - Conversion forcée en float ici aussi pour être sûr
+    cote = float(row.get('Cote', 0.0))
+    if cote > 0:
         if cote <= 3: score_cote = 100
         elif cote <= 6: score_cote = 80
         elif cote <= 10: score_cote = 60
@@ -199,7 +202,6 @@ if page == "📊 Tableau de bord":
 # ==========================================
 elif page == "📋 Résumé du jour":
     st.header("📋 Résumé de toutes les courses du jour")
-    
     date_du_jour = datetime.now().strftime("%d%m%Y")
     courses_du_jour = df[df["Date"] == date_du_jour]
     
@@ -208,7 +210,6 @@ elif page == "📋 Résumé du jour":
         dates_valides = [d for d in df["Date"].unique() if isinstance(d, str) and len(d) == 8]
         date_alt = st.selectbox("Autre date :", sorted(dates_valides, reverse=True))
         courses_du_jour = df[df["Date"] == date_alt]
-        st.write(f"🔍 Courses trouvées pour {date_alt} : {len(courses_du_jour)}")
     else:
         st.success(f"✅ {len(courses_du_jour)} partants trouvés pour le {date_du_jour}")
         courses_list = courses_du_jour.groupby(["Réu", "Course", "Hippo", "Dist"]).size().reset_index()
@@ -220,68 +221,35 @@ elif page == "📋 Résumé du jour":
             num_course = int(course["Course"])
             hippo = str(course["Hippo"])
             dist = int(course["Dist"])
-            
             parts = courses_du_jour[(courses_du_jour["Réu"] == reu) & (courses_du_jour["Course"] == num_course)].copy()
             
             if not parts.empty:
                 parts["Score"] = parts.apply(lambda row: calculer_score_ameliore(row, df, parts), axis=1)
                 parts = parts.sort_values("Score", ascending=False)
                 top3 = parts.head(3)
-                
                 for i, (_, cheval) in enumerate(top3.iterrows()):
                     recap_data.append({
-                        "Hippodrome": hippo,
-                        "Course": f"R{reu}C{num_course}",
-                        "Distance": f"{dist}m",
-                        "Rang": i + 1,
-                        "Num": int(cheval["Num_PMU"]),
-                        "Cheval": cheval["Cheval"],
-                        "Score": float(cheval["Score"]),
-                        "Musique": str(cheval.get("Musique", "")),
-                        "Cote": float(cheval.get("Cote", 0))
+                        "Hippodrome": hippo, "Course": f"R{reu}C{num_course}", "Distance": f"{dist}m",
+                        "Rang": i + 1, "Num": int(cheval["Num_PMU"]), "Cheval": cheval["Cheval"],
+                        "Score": float(cheval["Score"]), "Cote": float(cheval.get("Cote", 0))
                     })
         
         if recap_data:
             recap_df = pd.DataFrame(recap_data)
             st.subheader("🏆 Top 3 de chaque course")
-            st.dataframe(recap_df[["Hippodrome", "Course", "Rang", "Num", "Cheval", "Score", "Musique", "Cote"]], use_container_width=True, hide_index=True)
-            
-            csv = recap_df.to_csv(index=False, sep=';')
-            st.download_button(label="📥 Télécharger le résumé en CSV", data=csv, file_name=f"resume_{date_du_jour}.csv", mime="text/csv")
-            
-            st.markdown("---")
-            st.subheader("📊 Détail par hippodrome")
-            
-            for hippo_name in recap_df["Hippodrome"].unique():
-                courses_hippo = recap_df[recap_df["Hippodrome"] == hippo_name]
-                with st.expander(f"🏟️ **{hippo_name}** ({len(courses_hippo['Course'].unique())} courses)", expanded=False):
-                    for course_num in courses_hippo["Course"].unique():
-                        course_data = courses_hippo[courses_hippo["Course"] == course_num]
-                        st.markdown(f"**{course_data.iloc[0]['Distance']}** - {course_num}")
-                        
-                        col1, col2, col3 = st.columns(3)
-                        for i, (_, row) in enumerate(course_data.iterrows()):
-                            with [col1, col2, col3][i]:
-                                medal = ["🥇", "🥈", "🥉"][i]
-                                st.metric(f"{medal} {row['Cheval']}", f"Score: {row['Score']}")
-                                musique_str = str(row['Musique'])
-                                st.caption(f"Musique: {musique_str[:20]}..." if len(musique_str) > 20 else f"Musique: {musique_str}")
-                                st.caption(f"Cote: {row['Cote']}")
+            st.dataframe(recap_df, use_container_width=True, hide_index=True)
 
 # ==========================================
 # PAGE 3: Analyse d'une course
 # ==========================================
 elif page == "🏆 Analyse d'une course":
     st.header("🏆 Analyse détaillée d'une course")
-    
     dates_valides = [d for d in df["Date"].unique() if isinstance(d, str) and len(d) == 8]
     dates = sorted(dates_valides, reverse=True)
-    
     date_sel = st.selectbox("📅 Date :", dates, index=0)
     
     courses_df = df[df["Date"] == date_sel].groupby(["Réu", "Course", "Hippo", "Dist"]).size().reset_index(name='count')
     courses_df["label"] = courses_df.apply(lambda x: f"{x['Hippo']} - R{x['Réu']}C{x['Course']} ({x['Dist']}m)", axis=1)
-    
     course_label = st.selectbox("🏇 Course :", courses_df["label"])
     
     if course_label:
@@ -291,89 +259,52 @@ elif page == "🏆 Analyse d'une course":
         st.session_state.selected_course = int(info["Course"])
         
         parts = df[(df["Date"] == str(date_sel)) & (df["Réu"] == int(info["Réu"])) & (df["Course"] == int(info["Course"]))]
-        
-        col1, col2, col3, col4 = st.columns(4)
-        with col1: st.info(f"**Date:** {date_sel}")
-        with col2: st.info(f"**Hippodrome:** {info['Hippo']}")
-        with col3: st.info(f"**Distance:** {info['Dist']}m")
-        with col4: st.info(f"**Partants:** {len(parts)}")
-        
         st.markdown("---")
-        st.subheader("🐎 Partants")
-        cols_affichage = ["Num_PMU", "Cheval", "Âge", "Sexe", "Poids", "Corde", "Musique", "Cote", "Classement", "Gains_Car"]
-        cols_affichage = [c for c in cols_affichage if c in parts.columns]
-        st.dataframe(parts[cols_affichage], use_container_width=True)
+        st.dataframe(parts[["Num_PMU", "Cheval", "Poids", "Corde", "Cote", "Gains_Car"]], use_container_width=True)
 
 # ==========================================
 # PAGE 4: Statistiques chevaux
 # ==========================================
 elif page == "🐎 Statistiques chevaux":
     st.header("🐎 Statistiques des chevaux")
-    
     if st.session_state.selected_date is None:
-        st.warning("⚠️ Va d'abord dans **🏆 Analyse d'une course** pour sélectionner une course !")
+        st.warning("⚠️ Va d'abord dans **🏆 Analyse d'une course** !")
     else:
-        parts = df[
-            (df["Date"] == str(st.session_state.selected_date)) & 
-            (df["Réu"] == int(st.session_state.selected_reu)) & 
-            (df["Course"] == int(st.session_state.selected_course))
-        ]
-        
-        if parts.empty:
-            st.error("❌ Aucun partant trouvé pour cette course")
-        else:
-            st.success(f"✅ Course du **{st.session_state.selected_date}** - R{st.session_state.selected_reu}C{st.session_state.selected_course}")
-            
-            st.subheader("📊 Partants")
-            st.dataframe(parts[["Num_PMU", "Cheval", "Âge", "Musique", "Poids", "Corde", "Gains_Car"]], use_container_width=True)
-            
-            st.markdown("---")
-            st.subheader("🔍 Détail d'un cheval")
+        parts = df[(df["Date"] == str(st.session_state.selected_date)) & (df["Réu"] == int(st.session_state.selected_reu)) & (df["Course"] == int(st.session_state.selected_course))]
+        if not parts.empty:
+            st.success(f"✅ Course du **{st.session_state.selected_date}**")
             cheval_choisi = st.selectbox("Sélectionne un cheval :", parts["Cheval"].unique())
-            
             if cheval_choisi:
                 historique = df[df["Cheval"] == cheval_choisi].sort_values("Date", ascending=False)
-                
-                col1, col2, col3, col4 = st.columns(4)
-                with col1: st.metric("Courses", len(historique))
-                with col2: st.metric("Victoires", int((historique["Classement"] == 1).sum()))
-                with col3:
-                    taux = int((historique["Classement"] == 1).sum()) / len(historique) * 100 if len(historique) > 0 else 0
-                    st.metric("Taux", f"{taux:.1f}%")
-                with col4: st.metric("Gains max", f"{int(historique['Gains_Car'].max()):,}€")
-                
-                if len(historique) > 0:
-                    st.subheader("📅 Historique")
-                    cols = ["Date", "Hippo", "Dist", "Classement", "Cote", "Gains_Car", "Musique"]
-                    cols = [c for c in cols if c in historique.columns]
-                    st.dataframe(historique[cols], use_container_width=True)
+                st.dataframe(historique[["Date", "Hippo", "Dist", "Classement", "Cote"]], use_container_width=True)
 
 # ==========================================
-# PAGE 5: Score prédictif
+# PAGE 5: Score prédictif (AVEC DEBUG)
 # ==========================================
 elif page == "🎯 Score prédictif":
     st.header("🎯 Score prédictif")
-    st.info("💡 Score sur 100 pts")
     
     if st.session_state.selected_date is None:
         st.warning("⚠️ Va d'abord dans **🏆 Analyse d'une course** !")
     else:
-        parts = df[
-            (df["Date"] == str(st.session_state.selected_date)) & 
-            (df["Réu"] == int(st.session_state.selected_reu)) & 
-            (df["Course"] == int(st.session_state.selected_course))
-        ].copy()
+        parts = df[(df["Date"] == str(st.session_state.selected_date)) & (df["Réu"] == int(st.session_state.selected_reu)) & (df["Course"] == int(st.session_state.selected_course))].copy()
         
         if not parts.empty:
+            # 🔍 DEBUG ULTIME : Affichage des cotes brutes pour vérification
+            if int(st.session_state.selected_reu) == 3 and int(st.session_state.selected_course) == 5:
+                st.markdown("### 🔍 PREUVE QUE LES COTES SONT LUES (R3C5)")
+                debug_df = parts[["Num_PMU", "Cheval", "Cote"]].copy()
+                debug_df["Type de la Cote"] = debug_df["Cote"].apply(lambda x: type(x).__name__)
+                st.dataframe(debug_df, use_container_width=True)
+                st.markdown("---")
+
             st.success(f"✅ Course du **{st.session_state.selected_date}**")
             parts["Score"] = parts.apply(lambda row: calculer_score_ameliore(row, df, parts), axis=1)
             parts = parts.sort_values("Score", ascending=False)
             parts["Rang"] = range(1, len(parts)+1)
             
             st.subheader("🏆 Classement")
-            cols = ["Rang", "Num_PMU", "Cheval", "Score", "Cote", "Musique"]
-            cols = [c for c in cols if c in parts.columns]
-            st.dataframe(parts[cols], use_container_width=True)
+            st.dataframe(parts[["Rang", "Num_PMU", "Cheval", "Score", "Cote", "Musique"]], use_container_width=True)
             
             fig = px.bar(parts, x="Cheval", y="Score", color="Score", color_continuous_scale="Viridis")
             st.plotly_chart(fig, use_container_width=True)
@@ -387,10 +318,7 @@ elif page == "🔍 Recherche cheval":
     if search:
         results = df[df["Cheval"].str.contains(search, case=False, na=False)]
         if not results.empty:
-            st.success(f"✅ {len(results)} course(s) trouvée(s)")
-            st.dataframe(results[["Date", "Hippo", "Dist", "Cheval", "Classement", "Cote"]].head(20), use_container_width=True)
-        else:
-            st.warning("Aucun résultat")
+            st.dataframe(results[["Date", "Hippo", "Cheval", "Classement", "Cote"]].head(20), use_container_width=True)
 
 st.markdown("---")
 st.markdown("<div style='text-align:center;color:gray;font-size:12px'>🏇 Galop Analyzer</div>", unsafe_allow_html=True)
