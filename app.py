@@ -327,37 +327,28 @@ elif page == "🎯 Score prédictif":
 # ==========================================
 # PAGE 6: Recherche
 # ==========================================
-elif page == "🔍 Recherche cheval":
+elif page == " Recherche cheval":
     st.header("🔍 Recherche un cheval")
     search = st.text_input("Nom du cheval :")
     
     if search:
-        st.write(f" Total lignes dans la base: {len(df)}")
+        st.write(f"📊 Total lignes dans la base: {len(df)}")
         st.write(f"🔍 Tu cherches: '{search}'")
         
-        # Affiche quelques exemples de noms pour voir le format
-        st.write("📋 Exemples de noms dans la base:")
-        exemples = df["Cheval"].head(20).unique()
-        st.write(", ".join(exemples[:10]))
+        # Recherche robuste : majuscules + suppression espaces
+        search_clean = search.upper().strip()
         
-        # Recherche robuste
-        search_upper = search.upper().strip()
-        results = df[df["Cheval"].str.upper().str.contains(search_upper, na=False)]
+        # Méthode 1 : Recherche exacte
+        results = df[df["Cheval"].str.upper().str.contains(search_clean, na=False)]
         
-        st.write(f" Résultats trouvés: {len(results)}")
+        st.write(f"🔍 Résultats trouvés: {len(results)}")
         
         if not results.empty:
+            st.success(f"✅ Trouvé {len(results)} course(s) pour {search}")
             st.dataframe(results[["Date", "Hippo", "Cheval", "Classement", "Cote"]].head(20), use_container_width=True)
         else:
-            st.warning(" Aucun résultat. Essayons de trouver des noms similaires...")
-            
-            # Recherche approximative
-            for nom in df["Cheval"].unique():
-                if search_upper in nom.upper() or nom.upper() in search_upper:
-                    st.write(f"💡 Nom similaire trouvé: **{nom}**")
-                    results_approx = df[df["Cheval"] == nom]
-                    st.dataframe(results_approx[["Date", "Hippo", "Cheval"]].head(5))
-                    break
+            st.warning("❌ Aucun résultat exact. Vérifions dans Google Sheets...")
+            st.info("💡 **Va dans ton Google Sheets** → Historique_Complet → Ctrl+F → Tape 'CAPABLE' pour voir comment le nom est écrit exactement.")
 
 st.markdown("---")
 st.markdown("<div style='text-align:center;color:gray;font-size:12px'>🏇 Galop Analyzer</div>", unsafe_allow_html=True)
