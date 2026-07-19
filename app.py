@@ -23,6 +23,7 @@ def load_data():
             st.sidebar.error(f"❌ Erreur courses du jour: {e}")
             df = df_historique
         
+        # Nettoyage des dates et textes
         if 'Date' in df.columns:
             df['Date'] = df['Date'].astype(str).str.strip()
         
@@ -30,13 +31,19 @@ def load_data():
             if col in df.columns:
                 df[col] = df[col].astype(str).str.strip()
         
-        for col in ['Dist', 'Nb_Partants', 'Num_PMU', 'Âge', 'Poids', 'Corde', 'Classement', 'Gains_Car', 'Cote', 'Réu', 'Course']:
+        # Conversion des nombres entiers
+        for col in ['Dist', 'Nb_Partants', 'Num_PMU', 'Âge', 'Poids', 'Corde', 'Classement', 'Gains_Car', 'Réu', 'Course']:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
         
+        # 🛠️ CORRECTION CRUCIALE POUR LES COTES (remplacer les virgules par des points)
+        if 'Cote' in df.columns:
+            df['Cote'] = df['Cote'].astype(str).str.replace(',', '.').str.replace('"', '')
+            df['Cote'] = pd.to_numeric(df['Cote'], errors='coerce').fillna(0.0)
+        
         return df
     except Exception as e:
-        st.error(f"Erreur: {e}")
+        st.error(f"Erreur de chargement: {e}")
         return None
 
 def nettoyer_nom(nom):
@@ -123,7 +130,7 @@ def calculer_score_ameliore(row, df_global, df_course):
         score += 5
 
     # 7. COTE (5 pts)
-    cote = row.get('Cote', 0)
+    cote = row.get('Cote', 0.0)
     if pd.notna(cote) and cote > 0:
         if cote <= 3: score_cote = 100
         elif cote <= 6: score_cote = 80
@@ -226,7 +233,7 @@ elif page == "📋 Résumé du jour":
                         "Rang": i + 1,
                         "Num": int(cheval["Num_PMU"]),
                         "Cheval": cheval["Cheval"],
-                        "Score": cheval["Score"],
+                        "Score": float(cheval["Score"]),
                         "Musique": str(cheval.get("Musique", "")),
                         "Cote": float(cheval.get("Cote", 0))
                     })
