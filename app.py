@@ -292,8 +292,7 @@ elif page == "🎯 Score prédictif":
                    (df["Course"] == int(st.session_state.selected_course))].copy()
         
         if not parts.empty:
-            # 🔍 DEBUG : Vérifions ce que le script "voit" pour le 1er cheval
-            st.markdown("### 🔍 Vérification des données (1er cheval de la liste)")
+            st.markdown("### 🔍 Vérification des données (1er cheval)")
             premier = parts.iloc[0]
             nom_propre = nettoyer_nom(premier['Cheval'])
             hist_cheval = df[df['Cheval'].apply(nettoyer_nom) == nom_propre]
@@ -308,12 +307,9 @@ elif page == "🎯 Score prédictif":
                 victoires_jockey = len(hist_cheval[(hist_cheval['Jockey'].apply(nettoyer_nom) == jockey) & (hist_cheval['Classement'] == 1)])
                 st.metric("Victoires avec ce jockey", victoires_jockey)
             
-            st.info("💡 *Si l'historique est faible, les points 'Jockey/Entraîneur' et 'Distance' seront à 0.*")
             st.markdown("---")
-
             st.success(f"✅ Course du **{st.session_state.selected_date}**")
             
-            # Calcul des scores
             parts["Score"] = parts.apply(lambda row: calculer_score_ameliore(row, df, parts), axis=1)
             parts = parts.sort_values("Score", ascending=False)
             parts["Rang"] = range(1, len(parts)+1)
@@ -327,28 +323,22 @@ elif page == "🎯 Score prédictif":
 # ==========================================
 # PAGE 6: Recherche
 # ==========================================
-   elif page == "🔍 Recherche cheval":
+elif page == "🔍 Recherche cheval":
     st.header("🔍 Recherche un cheval")
     search = st.text_input("Nom du cheval :")
     
     if search:
         st.write(f"📊 Total lignes dans la base: {len(df)}")
-        st.write(f"🔍 Tu cherches: '{search}'")
-        
-        # Recherche robuste : majuscules + suppression espaces
         search_clean = search.upper().strip()
-        
-        # Méthode 1 : Recherche exacte
         results = df[df["Cheval"].str.upper().str.contains(search_clean, na=False)]
         
         st.write(f"🔍 Résultats trouvés: {len(results)}")
         
         if not results.empty:
-            st.success(f"✅ Trouvé {len(results)} course(s) pour {search}")
+            st.success(f"✅ Trouvé {len(results)} course(s)")
             st.dataframe(results[["Date", "Hippo", "Cheval", "Classement", "Cote"]].head(20), use_container_width=True)
         else:
-            st.warning("❌ Aucun résultat exact. Vérifions dans Google Sheets...")
-            st.info("💡 **Va dans ton Google Sheets** → Historique_Complet → Ctrl+F → Tape 'CAPABLE' pour voir comment le nom est écrit exactement.")
+            st.warning("❌ Aucun résultat trouvé.")
 
 st.markdown("---")
 st.markdown("<div style='text-align:center;color:gray;font-size:12px'>🏇 Galop Analyzer</div>", unsafe_allow_html=True)
