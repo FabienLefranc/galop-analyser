@@ -151,22 +151,6 @@ def calculer_score_ameliore(row, df_global, df_course):
 
 df = load_data()
 
-# 🔍 DIAGNOSTIC DIRECT - Affiche les cotes brutes du CSV
-if not df.empty:
-    mask = (df['Date'] == '19072026') & (df['Réu'] == 3) & (df['Course'] == 5)
-    if not df[mask].empty:
-        st.warning("🔍 DEBUG COTES R3C5 (VALEURS BRUTES) :")
-        debug_data = []
-        for idx, row in df[mask].iterrows():
-            debug_data.append({
-                "N°": int(row['Num_PMU']),
-                "Cheval": row['Cheval'][:12],
-                "Cote (valeur)": row['Cote'],
-                "Type": type(row['Cote']).__name__
-            })
-        st.table(pd.DataFrame(debug_data))
-        st.markdown("---")
-
 if 'selected_date' not in st.session_state:
     st.session_state.selected_date = None
 if 'selected_reu' not in st.session_state:
