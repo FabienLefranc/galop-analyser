@@ -327,7 +327,7 @@ elif page == "🎯 Score prédictif":
 # ==========================================
 # PAGE 6: Recherche
 # ==========================================
-elif page == " Recherche cheval":
+   elif page == "🔍 Recherche cheval":
     st.header("🔍 Recherche un cheval")
     search = st.text_input("Nom du cheval :")
     
