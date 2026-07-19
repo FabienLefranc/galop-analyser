@@ -279,9 +279,6 @@ elif page == "🐎 Statistiques chevaux":
                 st.dataframe(historique[["Date", "Hippo", "Dist", "Classement", "Cote"]], use_container_width=True)
 
 # ==========================================
-# PAGE 5: Score prédictif (AVEC DEBUG)
-# ==========================================
-            # ==========================================
 # PAGE 5: Score prédictif
 # ==========================================
 elif page == "🎯 Score prédictif":
@@ -311,7 +308,7 @@ elif page == "🎯 Score prédictif":
                 victoires_jockey = len(hist_cheval[(hist_cheval['Jockey'].apply(nettoyer_nom) == jockey) & (hist_cheval['Classement'] == 1)])
                 st.metric("Victoires avec ce jockey", victoires_jockey)
             
-            st.info(f"💡 *Si l'historique est faible (ex: 1 ou 2 courses), les points 'Jockey/Entraîneur' et 'Distance' seront à 0. Il faut plus de données pour que l'IA brille !*")
+            st.info("💡 *Si l'historique est faible, les points 'Jockey/Entraîneur' et 'Distance' seront à 0.*")
             st.markdown("---")
 
             st.success(f"✅ Course du **{st.session_state.selected_date}**")
@@ -330,27 +327,22 @@ elif page == "🎯 Score prédictif":
 # ==========================================
 # PAGE 6: Recherche
 # ==========================================
-elif page == " Recherche cheval":
-    st.header(" Recherche un cheval")
+elif page == "🔍 Recherche cheval":
+    st.header("🔍 Recherche un cheval")
     search = st.text_input("Nom du cheval :")
     if search:
-        # DEBUG : Affiche les infos
-        st.write(f"📊 Total lignes dans df: {len(df)}")
-        st.write(f"📋 Colonnes disponibles: {list(df.columns)}")
+        st.write(f"📊 Total lignes dans la base: {len(df)}")
         
-        results = df[df["Cheval"].str.contains(search, case=False, na=False)]
+        # Recherche robuste en majuscules pour éviter les problèmes d'accents
+        search_upper = search.upper()
+        results = df[df["Cheval"].str.upper().str.contains(search_upper, na=False)]
         
         st.write(f"🔍 Résultats trouvés: {len(results)}")
         
         if not results.empty:
             st.dataframe(results[["Date", "Hippo", "Cheval", "Classement", "Cote"]].head(20), use_container_width=True)
         else:
-            st.warning(" Aucun résultat. Essayons une recherche partielle...")
-            # Recherche alternative
-            results_partiel = df[df["Cheval"].str.upper().str.contains(search.upper(), na=False)]
-            if not results_partiel.empty:
-                st.success(f"✅ Trouvé {len(results_partiel)} résultats avec recherche partielle")
-                st.dataframe(results_partiel[["Date", "Hippo", "Cheval"]].head(10))
+            st.warning("❌ Aucun résultat trouvé.")
 
 st.markdown("---")
 st.markdown("<div style='text-align:center;color:gray;font-size:12px'>🏇 Galop Analyzer</div>", unsafe_allow_html=True)
