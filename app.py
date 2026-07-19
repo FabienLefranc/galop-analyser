@@ -281,6 +281,37 @@ elif page == "🐎 Statistiques chevaux":
 # ==========================================
 # PAGE 5: Score prédictif (AVEC DEBUG)
 # ==========================================
+            #  DEBUG : Détail du calcul pour le premier cheval
+            if len(parts) > 0:
+                premier_cheval = parts.iloc[0]
+                st.markdown(f"### 🔍 Détail du calcul pour {premier_cheval['Cheval']}")
+                
+                # Récupérer son historique
+                nom_cheval = nettoyer_nom(premier_cheval['Cheval'])
+                hist = df[df['Cheval'].apply(nettoyer_nom) == nom_cheval]
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Total courses dans l'historique", len(hist))
+                with col2:
+                    victoires = len(hist[hist['Classement'] == 1])
+                    st.metric("Victoires totales", victoires)
+                with col3:
+                    # Victoires avec ce jockey
+                    jockey = nettoyer_nom(premier_cheval['Jockey'])
+                    victoires_jockey = len(hist[(hist['Jockey'].apply(nettoyer_nom) == jockey) & (hist['Classement'] == 1)])
+                    st.metric("Victoires avec ce jockey", victoires_jockey)
+                
+                st.write(f"**Jockey actuel** : `{premier_cheval['Jockey']}` (nettoyé: `{jockey}`)")
+                st.write(f"**Entraîneur actuel** : `{premier_cheval['Entraîneur']}`")
+                
+                # Affinité distance
+                dist_actuelle = float(premier_cheval['Dist'])
+                hist_distance = hist[(hist['Dist'] >= dist_actuelle - 200) & (hist['Dist'] <= dist_actuelle + 200)]
+                st.write(f"**Courses sur distance similaire (±200m)** : {len(hist_distance)}")
+                
+                st.markdown("---")
+
 elif page == "🎯 Score prédictif":
     st.header("🎯 Score prédictif")
     
