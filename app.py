@@ -281,55 +281,42 @@ elif page == "🐎 Statistiques chevaux":
 # ==========================================
 # PAGE 5: Score prédictif (AVEC DEBUG)
 # ==========================================
-            #  DEBUG : Détail du calcul pour le premier cheval
-            if len(parts) > 0:
-                premier_cheval = parts.iloc[0]
-                st.markdown(f"### 🔍 Détail du calcul pour {premier_cheval['Cheval']}")
-                
-                # Récupérer son historique
-                nom_cheval = nettoyer_nom(premier_cheval['Cheval'])
-                hist = df[df['Cheval'].apply(nettoyer_nom) == nom_cheval]
-                
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Total courses dans l'historique", len(hist))
-                with col2:
-                    victoires = len(hist[hist['Classement'] == 1])
-                    st.metric("Victoires totales", victoires)
-                with col3:
-                    # Victoires avec ce jockey
-                    jockey = nettoyer_nom(premier_cheval['Jockey'])
-                    victoires_jockey = len(hist[(hist['Jockey'].apply(nettoyer_nom) == jockey) & (hist['Classement'] == 1)])
-                    st.metric("Victoires avec ce jockey", victoires_jockey)
-                
-                st.write(f"**Jockey actuel** : `{premier_cheval['Jockey']}` (nettoyé: `{jockey}`)")
-                st.write(f"**Entraîneur actuel** : `{premier_cheval['Entraîneur']}`")
-                
-                # Affinité distance
-                dist_actuelle = float(premier_cheval['Dist'])
-                hist_distance = hist[(hist['Dist'] >= dist_actuelle - 200) & (hist['Dist'] <= dist_actuelle + 200)]
-                st.write(f"**Courses sur distance similaire (±200m)** : {len(hist_distance)}")
-                
-                st.markdown("---")
-
+            # ==========================================
+# PAGE 5: Score prédictif
+# ==========================================
 elif page == "🎯 Score prédictif":
     st.header("🎯 Score prédictif")
     
     if st.session_state.selected_date is None:
         st.warning("⚠️ Va d'abord dans **🏆 Analyse d'une course** !")
     else:
-        parts = df[(df["Date"] == str(st.session_state.selected_date)) & (df["Réu"] == int(st.session_state.selected_reu)) & (df["Course"] == int(st.session_state.selected_course))].copy()
+        parts = df[(df["Date"] == str(st.session_state.selected_date)) & 
+                   (df["Réu"] == int(st.session_state.selected_reu)) & 
+                   (df["Course"] == int(st.session_state.selected_course))].copy()
         
         if not parts.empty:
-            # 🔍 DEBUG ULTIME : Affichage des cotes brutes pour vérification
-            if int(st.session_state.selected_reu) == 3 and int(st.session_state.selected_course) == 5:
-                st.markdown("### 🔍 PREUVE QUE LES COTES SONT LUES (R3C5)")
-                debug_df = parts[["Num_PMU", "Cheval", "Cote"]].copy()
-                debug_df["Type de la Cote"] = debug_df["Cote"].apply(lambda x: type(x).__name__)
-                st.dataframe(debug_df, use_container_width=True)
-                st.markdown("---")
+            # 🔍 DEBUG : Vérifions ce que le script "voit" pour le 1er cheval
+            st.markdown("### 🔍 Vérification des données (1er cheval de la liste)")
+            premier = parts.iloc[0]
+            nom_propre = nettoyer_nom(premier['Cheval'])
+            hist_cheval = df[df['Cheval'].apply(nettoyer_nom) == nom_propre]
+            
+            col1, col2, col3 = st.columns(3)
+            with col1: 
+                st.metric("Courses dans l'historique", len(hist_cheval))
+            with col2: 
+                st.metric("Cote lue", f"{float(premier['Cote']):.2f}")
+            with col3: 
+                jockey = nettoyer_nom(premier['Jockey'])
+                victoires_jockey = len(hist_cheval[(hist_cheval['Jockey'].apply(nettoyer_nom) == jockey) & (hist_cheval['Classement'] == 1)])
+                st.metric("Victoires avec ce jockey", victoires_jockey)
+            
+            st.info(f"💡 *Si l'historique est faible (ex: 1 ou 2 courses), les points 'Jockey/Entraîneur' et 'Distance' seront à 0. Il faut plus de données pour que l'IA brille !*")
+            st.markdown("---")
 
             st.success(f"✅ Course du **{st.session_state.selected_date}**")
+            
+            # Calcul des scores
             parts["Score"] = parts.apply(lambda row: calculer_score_ameliore(row, df, parts), axis=1)
             parts = parts.sort_values("Score", ascending=False)
             parts["Rang"] = range(1, len(parts)+1)
