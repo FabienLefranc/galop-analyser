@@ -14,9 +14,12 @@ URL_COURSES_JOUR = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQJugx0HS5vI
 def load_data():
     try:
         df_historique = pd.read_csv(URL_CSV, on_bad_lines='skip', dtype={'Date': str})
+        df_historique.columns = df_historique.columns.str.strip().str.replace('\ufeff', '')
         st.sidebar.success(f"✅ Historique: {len(df_historique)} lignes")
+        
         try:
             df_today = pd.read_csv(URL_COURSES_JOUR, on_bad_lines='skip', dtype={'Date': str})
+            df_today.columns = df_today.columns.str.strip().str.replace('\ufeff', '')
             st.sidebar.success(f"✅ Courses du jour: {len(df_today)} lignes")
             df = pd.concat([df_historique, df_today], ignore_index=True)
         except Exception as e:
@@ -36,16 +39,18 @@ def load_data():
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
         
-        # 🛠️ CORRECTION CRUCIALE POUR LES COTES (remplacer les virgules par des points)
-        if 'Cote' in df.columns:
-            df['Cote'] = df['Cote'].astype(str).str.replace(',', '.').str.replace('"', '')
+        # 🛠️ CORRECTION DES COTES (remplacer les virgules par des points)
+        cote_col = next((col for col in df.columns if col.lower().strip().replace(' ', '') == 'cote'), None)
+        if cote_col:
+            df['Cote'] = df[cote_col].astype(str).str.replace(',', '.').str.replace('"', '')
             df['Cote'] = pd.to_numeric(df['Cote'], errors='coerce').fillna(0.0)
+        else:
+            st.warning("⚠️ Colonne 'Cote' non trouvée !")
         
         return df
     except Exception as e:
         st.error(f"Erreur de chargement: {e}")
         return None
-
 def nettoyer_nom(nom):
     """Enlève les espaces, les points et met en majuscules pour comparer les noms sans bug"""
     if pd.isna(nom): return ""
