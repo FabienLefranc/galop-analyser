@@ -378,38 +378,87 @@ if page == "📊 Tableau de bord":
     fig.update_layout(showlegend=False, height=400)
     st.plotly_chart(fig, use_container_width=True)
 
-elif page == "📋 Résumé du jour":
-    st.header("📋 Résumé de toutes les courses du jour")
+elif page == " Résumé du jour":
+    st.header(" Résumé de toutes les courses du jour")
     date_du_jour = datetime.now().strftime("%d%m%Y")
     courses_du_jour = df[df["Date"] == date_du_jour]
     
     if courses_du_jour.empty:
+        st.warning(f"⚠️ Aucune course trouvée pour la date {date_du_jour}")
         dates_valides = [d for d in df["Date"].unique() if isinstance(d, str) and len(d) == 8]
         date_alt = st.selectbox("Autre date :", sorted(dates_valides, reverse=True))
         courses_du_jour = df[df["Date"] == date_alt]
-    
-    st.success(f"✅ {len(courses_du_jour)} partants trouvés")
-    courses_list = courses_du_jour.groupby(["Réu", "Course", "Hippo", "Dist"]).size().reset_index()
-    st.markdown("---")
-    
-    recap_data = []
-    for _, course in courses_list.iterrows():
-        parts = courses_du_jour[(courses_du_jour["Réu"] == int(course["Réu"])) & (courses_du_jour["Course"] == int(course["Course"]))].copy()
-        if not parts.empty:
-            parts["Score"] = parts.apply(lambda row: calculer_score_ameliore(row, df, parts), axis=1)
-            parts = parts.sort_values("Score", ascending=False)
-            for i, (_, cheval) in enumerate(parts.head(3).iterrows()):
-                recap_data.append({
-                    "Hippodrome": str(course["Hippo"]), "Course": f"R{int(course['Réu'])}C{int(course['Course'])}", "Distance": f"{int(course['Dist'])}m",
-                    "Rang": i + 1, "Num": int(cheval["Num_PMU"]), "Cheval": cheval["Cheval"],
-                    "Score": float(cheval["Score"]), "Musique": str(cheval.get("Musique", "")), "Cote": float(cheval.get("Cote", 0))
-                })
-    
-    if recap_data:
-        recap_df = pd.DataFrame(recap_data)
-        st.subheader("🏆 Top 3 de chaque course")
-        st.dataframe(recap_df, use_container_width=True, hide_index=True)
-        st.download_button(label="📥 Télécharger le résumé en CSV", data=recap_df.to_csv(index=False, sep=';'), file_name=f"resume_{date_du_jour}.csv", mime="text/csv")
+        st.write(f"📊 Courses trouvées pour {date_alt} : {len(courses_du_jour)}")
+    else:
+        st.success(f"✅ {len(courses_du_jour)} partants trouvés pour le {date_du_jour}")
+        courses_list = courses_du_jour.groupby(["Réu", "Course", "Hippo", "Dist"]).size().reset_index()
+        st.markdown("---")
+        
+        recap_data = []
+        for _, course in courses_list.iterrows():
+            reu = int(course["Réu"])
+            num_course = int(course["Course"])
+            hippo = str(course["Hippo"])
+            dist = int(course["Dist"])
+            
+            parts = courses_du_jour[(courses_du_jour["Réu"] == reu) & (courses_du_jour["Course"] == num_course)].copy()
+            
+            if not parts.empty:
+                # Calcul de tous les scores
+                parts["Score"] = parts.apply(lambda row: calculer_score_ameliore(row, df, parts), axis=1)
+                parts["Proba_IA"] = parts.apply(lambda row: predire_proba_ml(row), axis=1)
+                parts["Proba_Norm"] = normaliser_probas_course(parts)
+                parts["Score_Combine"] = parts.apply(calculer_score_combine, axis=1)
+                parts = parts.sort_values("Score_Combine", ascending=False)
+                
+                top3 = parts.head(3)
+                
+                for i, (_, cheval) in enumerate(top3.iterrows()):
+                    recap_data.append({
+                        "Hippodrome": hippo, 
+                        "Course": f"R{reu}C{num_course}", 
+                        "Distance": f"{dist}m",
+                        "Rang": i + 1, 
+                        "Num": int(cheval["Num_PMU"]), 
+                        "Cheval": cheval["Cheval"],
+                        "Score_Combine": float(cheval["Score_Combine"]),
+                        "Score": float(cheval["Score"]), 
+                        "Proba_Norm": float(cheval["Proba_Norm"]),
+                        "Cote": float(cheval.get("Cote", 0))
+                    })
+        
+        if recap_data:
+            recap_df = pd.DataFrame(recap_data)
+            st.subheader("🏆 Top 3 de chaque course")
+            st.dataframe(recap_df, use_container_width=True, hide_index=True)
+            
+            # Téléchargement CSV
+            csv = recap_df.to_csv(index=False, sep=';')
+            st.download_button(
+                label="📥 Télécharger le résumé en CSV", 
+                data=csv, 
+                file_name=f"resume_{date_du_jour}.csv", 
+                mime="text/csv"
+            )
+            
+            st.markdown("---")
+            st.subheader("📊 Détail par hippodrome")
+            
+            for hippo_name in recap_df["Hippodrome"].unique():
+                courses_hippo = recap_df[recap_df["Hippodrome"] == hippo_name]
+                with st.expander(f"🏟️ **{hippo_name}** ({len(courses_hippo['Course'].unique())} courses)", expanded=False):
+                    for course_num in courses_hippo["Course"].unique():
+                        course_data = courses_hippo[courses_hippo["Course"] == course_num]
+                        st.markdown(f"**{course_data.iloc[0]['Distance']}** - {course_num}")
+                        
+                        col1, col2, col3 = st.columns(3)
+                        for i, (_, row) in enumerate(course_data.iterrows()):
+                            with [col1, col2, col3][i]:
+                                medal = ["🥇", "🥈", "🥉"][i]
+                                st.metric(f"{medal} {row['Cheval']}", f"Score: {row['Score_Combine']}")
+                                st.caption(f"📊 Score classique: {row['Score']}")
+                                st.caption(f"🤖 Proba IA: {row['Proba_Norm']}%")
+                                st.caption(f"💰 Cote: {row['Cote']}")
 
 elif page == "🏆 Analyse d'une course":
     st.header("🏆 Analyse détaillée d'une course")
@@ -454,10 +503,6 @@ elif page == "🎯 Score prédictif":
             parts["Score"] = parts.apply(lambda row: calculer_score_ameliore(row, df, parts), axis=1)
             parts["Proba_IA"] = parts.apply(lambda row: predire_proba_ml(row), axis=1)
             parts["Proba_Norm"] = normaliser_probas_course(parts)
-            
-            # Debug temporaire
-            st.write(f"🔍 Proba_IA brutes - Min: {parts['Proba_IA'].min()}, Max: {parts['Proba_IA'].max()}, Moy: {parts['Proba_IA'].mean():.2f}")
-            st.write(f"🔍 Total Proba_IA: {parts['Proba_IA'].sum():.2f}")
             
             # Score combiné et classement
             parts["Score_Combine"] = parts.apply(calculer_score_combine, axis=1)
