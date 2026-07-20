@@ -79,29 +79,26 @@ def load_data():
                 df[col] = df[col].str.replace('\ufeff', '', regex=False)
                 df[col] = df[col].str.strip()
         
-        if 'Cote' in df.columns:
-    # 1. Conversion en texte et nettoyage
-    df['Cote'] = df['Cote'].astype(str).str.strip()
+        # 🛠️ CORRECTION AGRESSIVE DES COTES
+	if 'Cote' in df.columns:
+   	 # Nettoyage et conversion robuste
+   	 df['Cote'] = df['Cote'].astype(str).str.strip()
+   	 df['Cote'] = df['Cote'].str.replace(',', '.', regex=False)
+   	 df['Cote'] = df['Cote'].str.replace('"', '', regex=False)
+   	 df['Cote'] = df['Cote'].str.replace("'", '', regex=False)
     
-    # 2. Remplacement virgule → point
-    df['Cote'] = df['Cote'].str.replace(',', '.', regex=False)
+   	# Conversion en float avec gestion des erreurs
+   	df['Cote'] = pd.to_numeric(df['Cote'], errors='coerce')
     
-    # 3. Suppression des guillemets et espaces
-    df['Cote'] = df['Cote'].str.replace('"', '', regex=False)
-    df['Cote'] = df['Cote'].str.replace("'", "", regex=False)
+    	# Correction des valeurs aberrantes (>100 = erreur de saisie)
+    	df.loc[df['Cote'] > 100, 'Cote'] = 10.0
     
-    # 4. Conversion en nombre
-    df['Cote'] = pd.to_numeric(df['Cote'], errors='coerce')
+    	# Remplissage des NaN (cotes manquantes) par 10.0 (valeur moyenne réaliste)
+    	df['Cote'] = df['Cote'].fillna(10.0)
     
-    # 5. Gestion des valeurs aberrantes (> 100 = erreur, on met 10)
-    df.loc[df['Cote'] > 100, 'Cote'] = 10.0
-    
-    # 6. Remplissage des NaN par 10 (cote moyenne)
-    df['Cote'] = df['Cote'].fillna(10.0)
-    
-    # 7. Affichage stats
-    cotes_valides = df[df['Cote'] > 0]['Cote']
-    st.sidebar.success(f"✅ Cotes corrigées (Moy: {cotes_valides.mean():.2f}, Min: {cotes_valides.min():.1f}, Max: {cotes_valides.max():.1f})")
+    	# Affichage stats
+    	cotes_valides = df[df['Cote'] > 0]['Cote']
+    	st.sidebar.success(f"✅ Cotes corrigées (Moy: {cotes_valides.mean():.2f}, Min: {cotes_valides.min():.1f}, Max: {cotes_valides.max():.1f})")
         
         for col in ['Dist', 'Nb_Partants', 'Num_PMU', 'Âge', 'Poids', 'Corde', 'Classement', 'Gains_Car', 'Réu', 'Course']:
             if col in df.columns:
