@@ -163,57 +163,58 @@ except Exception as e:
 # FONCTIONS DE CALCUL DE SCORE
 # ==========================================
 def predire_proba_ml(row):
+    """Calcule la probabilité de victoire avec le modèle IA"""
     if model_ml is None: 
-        st.sidebar.error("❌ model_ml est None")
         return 0.0
     
     try:
         cheval_nom = nettoyer_nom(row.get('Cheval', ''))
         jockey_actuel = nettoyer_nom(row.get('Jockey', ''))
+        entraineur_actuel = nettoyer_nom(row.get('Entraîneur', ''))
         dist_actuelle = float(row.get('Dist', 0))
         dist_groupe = int((dist_actuelle // 200) * 200)
         
-        # Debug
-        st.sidebar.write(f"🔍 Cheval: {cheval_nom[:20]}")
-        st.sidebar.write(f"🔍 Jockey: {jockey_actuel[:20]}")
-        st.sidebar.write(f"🔍 Distance: {dist_groupe}")
-        
+        # Récupération des stats
         taux_jockey = dict_jockey.get((cheval_nom, jockey_actuel), {}).get('taux_victoire', 0)
+        taux_entraineur = dict_entraineur.get((cheval_nom, entraineur_actuel), {}).get('taux_victoire', 0)
         taux_dist = dict_distance.get((cheval_nom, dist_groupe), {}).get('taux_victoire', 0)
-        
-        st.sidebar.write(f"📊 Taux jockey: {taux_jockey}")
-        st.sidebar.write(f"📊 Taux distance: {taux_dist}")
 
+        # Calcul du score forme
         musique = str(row.get('Musique', ''))
         chiffres = re.findall(r'\d+', musique)
         score_forme = 10
         if chiffres:
-            scores = [20 if int(c)==1 else 16 if int(c)==2 else 13 if int(c)==3 else 10 if int(c)==4 else 6 for c in chiffres[:5]]
+            scores = []
+            for c in chiffres[:5]:
+                val = int(c)
+                if val == 1: scores.append(20)
+                elif val == 2: scores.append(16)
+                elif val == 3: scores.append(13)
+                elif val == 4: scores.append(10)
+                else: scores.append(6)
             score_forme = np.mean(scores)
 
-        poids_kg = float(row.get('Poids', 0)) / 10  # Conversion grammes → kg
+        # Conversion poids grammes → kg (correction cruciale)
+        poids_kg = float(row.get('Poids', 0)) / 10
 
-features = {
-    'Cote': float(row.get('Cote', 10)),
-    'Poids': poids_kg,  # Maintenant en kg (58 au lieu de 580)
-    'Corde': float(row.get('Corde', 0)),
-    'Nb_Partants': float(row.get('Nb_Partants', 16)),
-    'Score_Forme': score_forme,
-    'Taux_victoire_jockey': taux_jockey,
-    'Taux_victoire_entraineur': 0,
-    'Taux_victoire_dist': taux_dist
-}
-        
-        st.sidebar.write(f"📊 Features: {features}")
+        # Construction des features
+        features = {
+            'Cote': float(row.get('Cote', 10)),
+            'Poids': poids_kg,
+            'Corde': float(row.get('Corde', 0)),
+            'Nb_Partants': float(row.get('Nb_Partants', 16)),
+            'Score_Forme': score_forme,
+            'Taux_victoire_jockey': taux_jockey,
+            'Taux_victoire_entraineur': taux_entraineur,
+            'Taux_victoire_dist': taux_dist
+        }
 
+        # Prédiction
         df_input = pd.DataFrame([features])
         proba = model_ml.predict_proba(df_input)[0][1]
-        st.sidebar.success(f"✅ Proba calculée: {proba*100:.1f}%")
         return round(proba * 100, 1)
+        
     except Exception as e:
-        st.sidebar.error(f"❌ Erreur prédiction: {e}")
-        import traceback
-        st.sidebar.code(traceback.format_exc())
         return 0.0
 
 def calculer_score_ameliore(row, df_global, df_course):
