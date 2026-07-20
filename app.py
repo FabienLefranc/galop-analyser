@@ -164,13 +164,14 @@ df = load_data()
 if 'CAPABLE' in str(df['Cheval'].values[:100]):
     st.warning("✅ CAPABLE trouvé dans les 100 premières lignes")
 else:
-    st.error(" CAPABLE NON trouvé dans les 100 premières lignes")
+    st.error("❌ CAPABLE NON trouvé dans les 100 premières lignes")
     
 # Affiche les 10 premiers noms de chevaux
 st.write("📋 Exemples de noms dans la base:")
 for i, nom in enumerate(df['Cheval'].head(20).unique()):
     if i < 10:
-        st.write(f"{i+1}. '{nom}' (longueur: {len(nom)}, bytes: {nom.encode('utf-8')})")
+        nom_str = str(nom)  # ⭐ Conversion sûre en string
+        st.write(f"{i+1}. '{nom_str}' (longueur: {len(nom_str)}, bytes: {nom_str.encode('utf-8')})")
 
 # Cherche CAPABLE de manière très large
 results_test = df[df['Cheval'].str.contains('CAP', na=False, case=False)]
