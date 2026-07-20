@@ -217,6 +217,30 @@ def predire_proba_ml(row):
     except Exception as e:
         return 0.0
 
+def recalibrer_proba(proba_brute):
+    """Rend les probabilités plus réalistes"""
+    if proba_brute <= 0:
+        return 0.0
+    if proba_brute >= 99:
+        return 75.0  # Plafond réaliste
+    
+    # Transformation pour "doux" les extrêmes
+    import math
+    p = proba_brute / 100
+    # Sigmoïde inversée
+    proba_recalibree = 1 / (1 + math.exp(-4 * (p - 0.5)))
+    return round(proba_recalibree * 100, 1)
+
+def calculer_score_combine(row):
+    """Combine Score Classique (60%) et Proba_IA recalibrée (40%)"""
+    score_classique = float(row.get('Score', 0))
+    proba_ia = float(row.get('Proba_IA', 0))
+    proba_recalibree = recalibrer_proba(proba_ia)
+    
+    # Normalisation : Score classique sur 100, Proba sur 100
+    score_combine = (score_classique * 0.6) + (proba_recalibree * 0.4)
+    return round(score_combine, 1)
+
 def calculer_score_ameliore(row, df_global, df_course):
     score = 0
     cheval_nom = nettoyer_nom(row.get('Cheval', ''))
@@ -404,11 +428,14 @@ elif page == "🎯 Score prédictif":
             st.success(f"✅ Course du **{st.session_state.selected_date}**")
             parts["Score"] = parts.apply(lambda row: calculer_score_ameliore(row, df, parts), axis=1)
             parts["Proba_IA"] = parts.apply(lambda row: predire_proba_ml(row), axis=1)
-            parts = parts.sort_values("Score", ascending=False)
+            parts["Proba_Calibree"] = parts["Proba_IA"].apply(recalibrer_proba)
+            parts["Score_Combine"] = parts.apply(calculer_score_combine, axis=1)
+            parts = parts.sort_values("Score_Combine", ascending=False)
+            parts["Rang"] = range(1, len(parts)+1)
             parts["Rang"] = range(1, len(parts)+1)
             
             st.subheader("🏆 Classement")
-            st.dataframe(parts[["Rang", "Num_PMU", "Cheval", "Score", "Proba_IA", "Cote", "Musique"]], use_container_width=True)
+            st.dataframe(parts[["Rang", "Num_PMU", "Cheval", "Score_Combine", "Score", "Proba_Calibree", "Cote", "Musique"]], use_container_width=True)
             
             fig = px.bar(parts, x="Cheval", y="Score", color="Score", color_continuous_scale="Viridis")
             st.plotly_chart(fig, use_container_width=True)
