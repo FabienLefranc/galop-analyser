@@ -439,23 +439,29 @@ elif page == "🐎 Statistiques chevaux":
                 st.dataframe(historique[["Date", "Hippo", "Dist", "Classement", "Cote"]], use_container_width=True)
 
 elif page == "🎯 Score prédictif":
-    st.header("🎯 Score prédictif")
+    st.header(" Score prédictif")
     if st.session_state.selected_date is None:
-        st.warning("⚠️ Va d'abord dans **🏆 Analyse d'une course** !")
+        st.warning("️ Va d'abord dans **🏆 Analyse d'une course** !")
     else:
-        parts = df[(df["Date"] == str(st.session_state.selected_date)) & (df["Réu"] == int(st.session_state.selected_reu)) & (df["Course"] == int(st.session_state.selected_course))].copy()
+        parts = df[(df["Date"] == str(st.session_state.selected_date)) & 
+                   (df["Réu"] == int(st.session_state.selected_reu)) & 
+                   (df["Course"] == int(st.session_state.selected_course))].copy()
+        
         if not parts.empty:
             st.success(f"✅ Course du **{st.session_state.selected_date}**")
+            
+            # Calcul des scores
             parts["Score"] = parts.apply(lambda row: calculer_score_ameliore(row, df, parts), axis=1)
             parts["Proba_IA"] = parts.apply(lambda row: predire_proba_ml(row), axis=1)
             parts["Proba_Norm"] = normaliser_probas_course(parts)
-		# Debug temporaire
-	    	st.write(f" Proba_IA brutes - Min: {parts['Proba_IA'].min()}, Max: {parts['Proba_IA'].max()}, Moy: {parts['Proba_IA'].mean():.2f}")
-	   	st.write(f" Total Proba_IA: {parts['Proba_IA'].sum():.2f}")
+            
+            # Debug temporaire
+            st.write(f"🔍 Proba_IA brutes - Min: {parts['Proba_IA'].min()}, Max: {parts['Proba_IA'].max()}, Moy: {parts['Proba_IA'].mean():.2f}")
+            st.write(f"🔍 Total Proba_IA: {parts['Proba_IA'].sum():.2f}")
+            
+            # Score combiné et classement
             parts["Score_Combine"] = parts.apply(calculer_score_combine, axis=1)
             parts = parts.sort_values("Score_Combine", ascending=False)
-            parts["Rang"] = range(1, len(parts)+1)
-            parts["Rang"] = range(1, len(parts)+1)
             parts["Rang"] = range(1, len(parts)+1)
             
             st.subheader("🏆 Classement")
