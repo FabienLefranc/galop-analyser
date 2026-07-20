@@ -162,23 +162,39 @@ df = load_data()
 
 import urllib.request
 
-st.write("### 🔍 Lecture brute du CSV (sans Pandas)")
+st.write("### 🔍 Analyse des colonnes du CSV")
 try:
     response = urllib.request.urlopen(URL_CSV)
-    # On lit le fichier texte brut
     raw_text = response.read().decode('utf-8', errors='ignore')
     lines = raw_text.split('\n')
     
-    # On cherche toutes les lignes qui contiennent CAPABLE
-    capable_lines = [line for line in lines if 'CAPABLE' in line.upper()]
-    st.write(f"🔍 Nombre de lignes brutes contenant 'CAPABLE' : {len(capable_lines)}")
+    # Compte les virgules de chaque ligne
+    col_counts = {}
+    bad_lines = []
     
-    if capable_lines:
-        st.write("👀 Voici à quoi ressemble la première ligne brute de CAPABLE :")
-        st.code(capable_lines[0])
-        st.info("💡 *Regarde bien s'il y a une virgule bizarre ou un guillemet mal placé dans cette ligne !*")
+    for i, line in enumerate(lines[:1000]):  # Analyse les 1000 premières lignes
+        if line.strip():
+            nb_virgules = line.count(',')
+            col_counts[nb_virgules] = col_counts.get(nb_virgules, 0) + 1
+            
+            # Si une ligne n'a pas 20 virgules (21 colonnes), c'est suspect
+            if nb_virgules != 20:
+                bad_lines.append((i, nb_virgules, line[:100]))
+    
+    st.write(f"📊 Distribution du nombre de virgules dans les 1000 premières lignes :")
+    for nb_virg, count in sorted(col_counts.items()):
+        st.write(f"  - {nb_virg} virgules ({nb_virg+1} colonnes) : {count} lignes")
+    
+    if bad_lines:
+        st.warning(f"⚠️ {len(bad_lines)} lignes ont un nombre de colonnes incorrect !")
+        st.write("Voici les 5 premières lignes problématiques :")
+        for idx, nb_virg, line in bad_lines[:5]:
+            st.write(f"Ligne {idx}: {nb_virg} virgules → `{line}`")
+    else:
+        st.success("✅ Toutes les lignes ont 20 virgules (21 colonnes)")
+        
 except Exception as e:
-    st.error(f"Erreur de lecture brute: {e}")
+    st.error(f"Erreur: {e}")
 
 if 'selected_date' not in st.session_state:
     st.session_state.selected_date = None
