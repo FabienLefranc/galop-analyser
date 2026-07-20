@@ -449,6 +449,9 @@ elif page == "🎯 Score prédictif":
             parts["Score"] = parts.apply(lambda row: calculer_score_ameliore(row, df, parts), axis=1)
             parts["Proba_IA"] = parts.apply(lambda row: predire_proba_ml(row), axis=1)
             parts["Proba_Norm"] = normaliser_probas_course(parts)
+	    # Debug temporaire
+	    st.write(f" Proba_IA brutes - Min: {parts['Proba_IA'].min()}, Max: {parts['Proba_IA'].max()}, Moy: {parts['Proba_IA'].mean():.2f}")
+	    st.write(f" Total Proba_IA: {parts['Proba_IA'].sum():.2f}")
             parts["Score_Combine"] = parts.apply(calculer_score_combine, axis=1)
             parts = parts.sort_values("Score_Combine", ascending=False)
             parts["Rang"] = range(1, len(parts)+1)
