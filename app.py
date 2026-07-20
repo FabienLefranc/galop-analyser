@@ -191,16 +191,18 @@ def predire_proba_ml(row):
             scores = [20 if int(c)==1 else 16 if int(c)==2 else 13 if int(c)==3 else 10 if int(c)==4 else 6 for c in chiffres[:5]]
             score_forme = np.mean(scores)
 
-        features = {
-            'Cote': float(row.get('Cote', 10)),
-            'Poids': float(row.get('Poids', 0)),
-            'Corde': float(row.get('Corde', 0)),
-            'Nb_Partants': float(row.get('Nb_Partants', 16)),
-            'Score_Forme': score_forme,
-            'Taux_victoire_jockey': taux_jockey,
-            'Taux_victoire_entraineur': 0,  # Simplifié
-            'Taux_victoire_dist': taux_dist
-        }
+        poids_kg = float(row.get('Poids', 0)) / 10  # Conversion grammes → kg
+
+features = {
+    'Cote': float(row.get('Cote', 10)),
+    'Poids': poids_kg,  # Maintenant en kg (58 au lieu de 580)
+    'Corde': float(row.get('Corde', 0)),
+    'Nb_Partants': float(row.get('Nb_Partants', 16)),
+    'Score_Forme': score_forme,
+    'Taux_victoire_jockey': taux_jockey,
+    'Taux_victoire_entraineur': 0,
+    'Taux_victoire_dist': taux_dist
+}
         
         st.sidebar.write(f"📊 Features: {features}")
 
