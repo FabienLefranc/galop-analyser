@@ -233,6 +233,7 @@ elif page == "📋 Résumé du jour":
         dates_valides = [d for d in df["Date"].unique() if isinstance(d, str) and len(d) == 8]
         date_alt = st.selectbox("Autre date :", sorted(dates_valides, reverse=True))
         courses_du_jour = df[df["Date"] == date_alt]
+        st.write(f" Courses trouvées pour {date_alt} : {len(courses_du_jour)}")
     else:
         st.success(f"✅ {len(courses_du_jour)} partants trouvés pour le {date_du_jour}")
         courses_list = courses_du_jour.groupby(["Réu", "Course", "Hippo", "Dist"]).size().reset_index()
@@ -244,23 +245,49 @@ elif page == "📋 Résumé du jour":
             num_course = int(course["Course"])
             hippo = str(course["Hippo"])
             dist = int(course["Dist"])
+            
             parts = courses_du_jour[(courses_du_jour["Réu"] == reu) & (courses_du_jour["Course"] == num_course)].copy()
             
             if not parts.empty:
                 parts["Score"] = parts.apply(lambda row: calculer_score_ameliore(row, df, parts), axis=1)
                 parts = parts.sort_values("Score", ascending=False)
                 top3 = parts.head(3)
+                
                 for i, (_, cheval) in enumerate(top3.iterrows()):
                     recap_data.append({
                         "Hippodrome": hippo, "Course": f"R{reu}C{num_course}", "Distance": f"{dist}m",
                         "Rang": i + 1, "Num": int(cheval["Num_PMU"]), "Cheval": cheval["Cheval"],
-                        "Score": float(cheval["Score"]), "Cote": float(cheval.get("Cote", 0))
+                        "Score": float(cheval["Score"]), "Musique": str(cheval.get("Musique", "")),
+                        "Cote": float(cheval.get("Cote", 0))
                     })
         
         if recap_data:
             recap_df = pd.DataFrame(recap_data)
             st.subheader("🏆 Top 3 de chaque course")
             st.dataframe(recap_df, use_container_width=True, hide_index=True)
+            
+            # Téléchargement CSV
+            csv = recap_df.to_csv(index=False, sep=';')
+            st.download_button(label="📥 Télécharger le résumé en CSV", data=csv, file_name=f"resume_{date_du_jour}.csv", mime="text/csv")
+            
+            st.markdown("---")
+            st.subheader("📊 Détail par hippodrome")
+            
+            for hippo_name in recap_df["Hippodrome"].unique():
+                courses_hippo = recap_df[recap_df["Hippodrome"] == hippo_name]
+                with st.expander(f"🏟️ **{hippo_name}** ({len(courses_hippo['Course'].unique())} courses)", expanded=False):
+                    for course_num in courses_hippo["Course"].unique():
+                        course_data = courses_hippo[courses_hippo["Course"] == course_num]
+                        st.markdown(f"**{course_data.iloc[0]['Distance']}** - {course_num}")
+                        
+                        col1, col2, col3 = st.columns(3)
+                        for i, (_, row) in enumerate(course_data.iterrows()):
+                            with [col1, col2, col3][i]:
+                                medal = ["🥇", "🥈", "🥉"][i]
+                                st.metric(f"{medal} {row['Cheval']}", f"Score: {row['Score']}")
+                                musique_str = str(row['Musique'])
+                                st.caption(f"Musique: {musique_str[:20]}..." if len(musique_str) > 20 else f"Musique: {musique_str}")
+                                st.caption(f"Cote: {row['Cote']}")
 
 # ==========================================
 # PAGE 3: Analyse d'une course
