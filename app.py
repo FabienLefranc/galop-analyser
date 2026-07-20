@@ -28,9 +28,17 @@ def load_data():
         if 'Date' in df.columns:
             df['Date'] = df['Date'].astype(str).str.strip()
         
-        for col in ['Cheval', 'Hippo']:
-            if col in df.columns:
-                df[col] = df[col].astype(str).str.strip()
+        # Nettoyage agressif des noms (enlève espaces, caractères invisibles, etc.)
+for col in ['Cheval', 'Hippo', 'Jockey', 'Entraîneur']:
+    if col in df.columns:
+        df[col] = df[col].astype(str).str.strip()
+        # Enlève les espaces insécables et caractères Unicode invisibles
+        df[col] = df[col].str.replace('\u00a0', ' ', regex=False)  # espace insécable
+        df[col] = df[col].str.replace('\u200b', '', regex=False)   # zero-width space
+        df[col] = df[col].str.replace('\u200c', '', regex=False)   # zero-width non-joiner
+        df[col] = df[col].str.replace('\u200d', '', regex=False)   # zero-width joiner
+        df[col] = df[col].str.replace('\ufeff', '', regex=False)   # BOM
+        df[col] = df[col].str.strip()  # Re-strip après nettoyage
         
         # 🛠️ CORRECTION AGRESSIVE DES COTES
         if 'Cote' in df.columns:
