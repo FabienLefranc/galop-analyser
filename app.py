@@ -189,11 +189,17 @@ def predire_proba_ml(row):
         dist_actuelle = float(row.get('Dist', 0))
         dist_groupe = int((dist_actuelle // 200) * 200)
         
+        # Debug : afficher le premier cheval
+        if row.get('Num_PMU') == list(parts['Num_PMU'])[0] if 'parts' in dir() else True:
+            st.write(f" DEBUG Cheval: {cheval_nom[:20]}")
+            st.write(f"🔍 DEBUG Jockey: {jockey_actuel[:20]}")
+            st.write(f" DEBUG Distance: {dist_groupe}")
+        
         # Récupération des stats
         taux_jockey = dict_jockey.get((cheval_nom, jockey_actuel), {}).get('taux_victoire', 0)
         taux_entraineur = dict_entraineur.get((cheval_nom, entraineur_actuel), {}).get('taux_victoire', 0)
         taux_dist = dict_distance.get((cheval_nom, dist_groupe), {}).get('taux_victoire', 0)
-
+        
         # Calcul du score forme
         musique = str(row.get('Musique', ''))
         chiffres = re.findall(r'\d+', musique)
@@ -209,7 +215,7 @@ def predire_proba_ml(row):
                 else: scores.append(6)
             score_forme = np.mean(scores)
 
-        # Conversion poids grammes → kg (correction cruciale)
+        # Conversion poids grammes → kg
         poids_kg = float(row.get('Poids', 0)) / 10
 
         # Construction des features
@@ -223,13 +229,25 @@ def predire_proba_ml(row):
             'Taux_victoire_entraineur': taux_entraineur,
             'Taux_victoire_dist': taux_dist
         }
-
+        
+        # Debug : afficher les features du premier cheval
+        if row.get('Num_PMU') == list(parts['Num_PMU'])[0] if 'parts' in dir() else True:
+            st.write(f"📊 DEBUG Features: {features}")
+        
         # Prédiction
         df_input = pd.DataFrame([features])
         proba = model_ml.predict_proba(df_input)[0][1]
+        
+        # Debug : afficher la proba
+        if row.get('Num_PMU') == list(parts['Num_PMU'])[0] if 'parts' in dir() else True:
+            st.write(f"✅ DEBUG Proba brute: {proba*100:.2f}%")
+        
         return round(proba * 100, 1)
         
     except Exception as e:
+        st.error(f"❌ ERREUR dans predire_proba_ml: {e}")
+        import traceback
+        st.code(traceback.format_exc())
         return 0.0
 
 def normaliser_probas_course(parts_df):
