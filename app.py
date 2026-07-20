@@ -14,10 +14,10 @@ URL_COURSES_JOUR = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQJugx0HS5vI
 def load_data():
     try:
         # On force la lecture de la Cote en TEXTE pour éviter les bugs de virgules
-        df_historique = pd.read_csv(URL_CSV, on_bad_lines='skip', dtype={'Date': str, 'Cote': str})
+        df_historique = pd.read_csv(URL_CSV, on_bad_lines='warn', dtype={'Date': str, 'Cote': str})
         st.sidebar.success(f"✅ Historique: {len(df_historique)} lignes")
         try:
-            df_today = pd.read_csv(URL_COURSES_JOUR, on_bad_lines='skip', dtype={'Date': str, 'Cote': str})
+            df_today = pd.read_csv(URL_COURSES_JOUR, on_bad_lines='warn', dtype={'Date': str, 'Cote': str})
             st.sidebar.success(f"✅ Courses du jour: {len(df_today)} lignes")
             df = pd.concat([df_historique, df_today], ignore_index=True)
         except Exception as e:
