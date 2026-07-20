@@ -378,8 +378,8 @@ if page == "📊 Tableau de bord":
     fig.update_layout(showlegend=False, height=400)
     st.plotly_chart(fig, use_container_width=True)
 
-elif page == " Résumé du jour":
-    st.header(" Résumé de toutes les courses du jour")
+elif page == "📋 Résumé du jour":
+    st.header("📋 Résumé de toutes les courses du jour")
     date_du_jour = datetime.now().strftime("%d%m%Y")
     courses_du_jour = df[df["Date"] == date_du_jour]
     
@@ -404,7 +404,6 @@ elif page == " Résumé du jour":
             parts = courses_du_jour[(courses_du_jour["Réu"] == reu) & (courses_du_jour["Course"] == num_course)].copy()
             
             if not parts.empty:
-                # Calcul de tous les scores
                 parts["Score"] = parts.apply(lambda row: calculer_score_ameliore(row, df, parts), axis=1)
                 parts["Proba_IA"] = parts.apply(lambda row: predire_proba_ml(row), axis=1)
                 parts["Proba_Norm"] = normaliser_probas_course(parts)
@@ -415,14 +414,14 @@ elif page == " Résumé du jour":
                 
                 for i, (_, cheval) in enumerate(top3.iterrows()):
                     recap_data.append({
-                        "Hippodrome": hippo, 
-                        "Course": f"R{reu}C{num_course}", 
+                        "Hippodrome": hippo,
+                        "Course": f"R{reu}C{num_course}",
                         "Distance": f"{dist}m",
-                        "Rang": i + 1, 
-                        "Num": int(cheval["Num_PMU"]), 
+                        "Rang": i + 1,
+                        "Num": int(cheval["Num_PMU"]),
                         "Cheval": cheval["Cheval"],
                         "Score_Combine": float(cheval["Score_Combine"]),
-                        "Score": float(cheval["Score"]), 
+                        "Score": float(cheval["Score"]),
                         "Proba_Norm": float(cheval["Proba_Norm"]),
                         "Cote": float(cheval.get("Cote", 0))
                     })
@@ -432,12 +431,11 @@ elif page == " Résumé du jour":
             st.subheader("🏆 Top 3 de chaque course")
             st.dataframe(recap_df, use_container_width=True, hide_index=True)
             
-            # Téléchargement CSV
             csv = recap_df.to_csv(index=False, sep=';')
             st.download_button(
-                label="📥 Télécharger le résumé en CSV", 
-                data=csv, 
-                file_name=f"resume_{date_du_jour}.csv", 
+                label="📥 Télécharger le résumé en CSV",
+                data=csv,
+                file_name=f"resume_{date_du_jour}.csv",
                 mime="text/csv"
             )
             
@@ -457,8 +455,8 @@ elif page == " Résumé du jour":
                                 medal = ["🥇", "🥈", "🥉"][i]
                                 st.metric(f"{medal} {row['Cheval']}", f"Score: {row['Score_Combine']}")
                                 st.caption(f"📊 Score classique: {row['Score']}")
-                                st.caption(f"🤖 Proba IA: {row['Proba_Norm']}%")
-                                st.caption(f"💰 Cote: {row['Cote']}")
+                                st.caption(f" Proba IA: {row['Proba_Norm']}%")
+                                st.caption(f" Cote: {row['Cote']}")
 
 elif page == "🏆 Analyse d'une course":
     st.header("🏆 Analyse détaillée d'une course")
