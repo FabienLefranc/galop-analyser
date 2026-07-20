@@ -10,14 +10,29 @@ st.set_page_config(page_title="Galop Analyzer", page_icon="🏇", layout="wide",
 URL_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQJugx0HS5vID0MHWLRO-5GYEBtb1vmJXvZrYPLfI4x6avcitpRO7dtfRE9WxK3UwZRpzx-59MRicxV/pub?gid=1556658374&single=true&output=csv"
 URL_COURSES_JOUR = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQJugx0HS5vID0MHWLRO-5GYEBtb1vmJXvZrYPLfI4x6avcitpRO7dtfRE9WxK3UwZRpzx-59MRicxV/pub?gid=365561583&single=true&output=csv"
 
+# Liste officielle des colonnes (puisque le CSV n'a plus d'en-tête)
+COLONNES_CSV = [
+    'Date', 'Réu', 'Course', 'Hippo', 'Dist', 'Disc', 'Spécialité', 'Terrain', 
+    'Nb_Partants', 'Num_PMU', 'Cheval', 'Âge', 'Sexe', 'Jockey', 'Entraîneur', 
+    'Poids', 'Corde', 'Musique', 'Cote', 'Classement', 'Gains_Car'
+]
+
 @st.cache_data(ttl=60)
 def load_data():
     try:
-        # On force la lecture de la Cote en TEXTE pour éviter les bugs de virgules
-        df_historique = pd.read_csv(URL_CSV, on_bad_lines='warn', dtype={'Date': str, 'Cote': str})
+        # header=None + names=COLONNES_CSV force Pandas à utiliser nos noms
+        df_historique = pd.read_csv(URL_CSV, header=None, names=COLONNES_CSV, 
+                                    on_bad_lines='skip', dtype={'Date': str, 'Cote': str})
+        
+        # Si jamais l'en-tête réapparaît dans le CSV, on supprime la ligne "Date"
+        df_historique = df_historique[df_historique['Date'] != 'Date']
+        
         st.sidebar.success(f"✅ Historique: {len(df_historique)} lignes")
+        
         try:
-            df_today = pd.read_csv(URL_COURSES_JOUR, on_bad_lines='warn', dtype={'Date': str, 'Cote': str})
+            df_today = pd.read_csv(URL_COURSES_JOUR, header=None, names=COLONNES_CSV, 
+                                   on_bad_lines='skip', dtype={'Date': str, 'Cote': str})
+            df_today = df_today[df_today['Date'] != 'Date']
             st.sidebar.success(f"✅ Courses du jour: {len(df_today)} lignes")
             df = pd.concat([df_historique, df_today], ignore_index=True)
         except Exception as e:
@@ -28,19 +43,18 @@ def load_data():
         if 'Date' in df.columns:
             df['Date'] = df['Date'].astype(str).str.strip()
         
-        # Nettoyage agressif des noms (enlève espaces, caractères invisibles, etc.)
+        # Nettoyage agressif des noms
         for col in ['Cheval', 'Hippo', 'Jockey', 'Entraîneur']:
             if col in df.columns:
                 df[col] = df[col].astype(str).str.strip()
-                # Enlève les espaces insécables et caractères Unicode invisibles
-                df[col] = df[col].str.replace('\u00a0', ' ', regex=False)  # espace insécable
-                df[col] = df[col].str.replace('\u200b', '', regex=False)   # zero-width space
-                df[col] = df[col].str.replace('\u200c', '', regex=False)   # zero-width non-joiner
-                df[col] = df[col].str.replace('\u200d', '', regex=False)   # zero-width joiner
-                df[col] = df[col].str.replace('\ufeff', '', regex=False)   # BOM
-                df[col] = df[col].str.strip()  # Re-strip après nettoyage
+                df[col] = df[col].str.replace('\u00a0', ' ', regex=False)
+                df[col] = df[col].str.replace('\u200b', '', regex=False)
+                df[col] = df[col].str.replace('\u200c', '', regex=False)
+                df[col] = df[col].str.replace('\u200d', '', regex=False)
+                df[col] = df[col].str.replace('\ufeff', '', regex=False)
+                df[col] = df[col].str.strip()
         
-        # 🛠️ CORRECTION AGRESSIVE DES COTES
+        # ️ CORRECTION AGRESSIVE DES COTES
         if 'Cote' in df.columns:
             df['Cote'] = df['Cote'].astype(str)
             df['Cote'] = df['Cote'].str.replace('"', '', regex=False).str.strip()
@@ -159,24 +173,6 @@ def calculer_score_ameliore(row, df_global, df_course):
     return round(min(100, max(0, score)), 1)
 
 df = load_data()
-
-import pandas as pd
-
-st.write("###  VRAIES COLONNES DU CSV")
-
-try:
-    # On lit juste les 5 premières lignes pour aller vite
-    df_test = pd.read_csv(URL_CSV, on_bad_lines='skip', dtype=str, nrows=5)
-    st.write(f"✅ CSV lu. Nombre de colonnes détectées : {len(df_test.columns)}")
-    
-    # Affiche les noms exacts des colonnes
-    st.write("👀 Noms des colonnes détectés par Python :")
-    for i, col in enumerate(df_test.columns):
-        # On affiche la longueur pour voir les espaces invisibles
-        st.write(f"{i+1}. '{col}' (longueur: {len(col)})")
-        
-except Exception as e:
-    st.error(f"Erreur: {e}")
 
 if 'selected_date' not in st.session_state:
     st.session_state.selected_date = None
