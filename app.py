@@ -164,17 +164,25 @@ except Exception as e:
 # ==========================================
 def predire_proba_ml(row):
     if model_ml is None: 
+        st.sidebar.error("❌ model_ml est None")
         return 0.0
+    
     try:
         cheval_nom = nettoyer_nom(row.get('Cheval', ''))
         jockey_actuel = nettoyer_nom(row.get('Jockey', ''))
-        entraineur_actuel = nettoyer_nom(row.get('Entraîneur', ''))
         dist_actuelle = float(row.get('Dist', 0))
         dist_groupe = int((dist_actuelle // 200) * 200)
         
+        # Debug
+        st.sidebar.write(f"🔍 Cheval: {cheval_nom[:20]}")
+        st.sidebar.write(f"🔍 Jockey: {jockey_actuel[:20]}")
+        st.sidebar.write(f"🔍 Distance: {dist_groupe}")
+        
         taux_jockey = dict_jockey.get((cheval_nom, jockey_actuel), {}).get('taux_victoire', 0)
-        taux_entraineur = dict_entraineur.get((cheval_nom, entraineur_actuel), {}).get('taux_victoire', 0)
         taux_dist = dict_distance.get((cheval_nom, dist_groupe), {}).get('taux_victoire', 0)
+        
+        st.sidebar.write(f"📊 Taux jockey: {taux_jockey}")
+        st.sidebar.write(f"📊 Taux distance: {taux_dist}")
 
         musique = str(row.get('Musique', ''))
         chiffres = re.findall(r'\d+', musique)
@@ -184,15 +192,26 @@ def predire_proba_ml(row):
             score_forme = np.mean(scores)
 
         features = {
-            'Cote': float(row.get('Cote', 10)), 'Poids': float(row.get('Poids', 0)),
-            'Corde': float(row.get('Corde', 0)), 'Nb_Partants': float(row.get('Nb_Partants', 16)),
-            'Score_Forme': score_forme, 'Taux_victoire_jockey': taux_jockey,
-            'Taux_victoire_entraineur': taux_entraineur, 'Taux_victoire_dist': taux_dist
+            'Cote': float(row.get('Cote', 10)),
+            'Poids': float(row.get('Poids', 0)),
+            'Corde': float(row.get('Corde', 0)),
+            'Nb_Partants': float(row.get('Nb_Partants', 16)),
+            'Score_Forme': score_forme,
+            'Taux_victoire_jockey': taux_jockey,
+            'Taux_victoire_entraineur': 0,  # Simplifié
+            'Taux_victoire_dist': taux_dist
         }
+        
+        st.sidebar.write(f"📊 Features: {features}")
+
         df_input = pd.DataFrame([features])
         proba = model_ml.predict_proba(df_input)[0][1]
+        st.sidebar.success(f"✅ Proba calculée: {proba*100:.1f}%")
         return round(proba * 100, 1)
-    except Exception:
+    except Exception as e:
+        st.sidebar.error(f"❌ Erreur prédiction: {e}")
+        import traceback
+        st.sidebar.code(traceback.format_exc())
         return 0.0
 
 def calculer_score_ameliore(row, df_global, df_course):
