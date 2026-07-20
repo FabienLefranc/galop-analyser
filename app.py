@@ -266,60 +266,70 @@ def predire_proba_ml(row):
     if model_ml is None: 
         return 0.0
     
-    cheval_nom = nettoyer_nom(row.get('Cheval', ''))
-    jockey_actuel = nettoyer_nom(row.get('Jockey', ''))
-    entraineur_actuel = nettoyer_nom(row.get('Entraîneur', ''))
-    dist_actuelle = float(row.get('Dist', 0))
-    dist_groupe = int((dist_actuelle // 200) * 200)
-    
-    # Récupération des stats
-    taux_jockey = 0
-    taux_entraineur = 0
-    taux_dist = 0
-    
-    if (cheval_nom, jockey_actuel) in dict_jockey:
-        taux_jockey = dict_jockey[(cheval_nom, jockey_actuel)]['taux_victoire']
+    try:
+        cheval_nom = nettoyer_nom(row.get('Cheval', ''))
+        jockey_actuel = nettoyer_nom(row.get('Jockey', ''))
+        entraineur_actuel = nettoyer_nom(row.get('Entraîneur', ''))
+        dist_actuelle = float(row.get('Dist', 0))
+        dist_groupe = int((dist_actuelle // 200) * 200)
         
-    if (cheval_nom, entraineur_actuel) in dict_entraineur:
-        taux_entraineur = dict_entraineur[(cheval_nom, entraineur_actuel)]['taux_victoire']
+        # Récupération des stats
+        taux_jockey = 0
+        taux_entraineur = 0
+        taux_dist = 0
         
-    if (cheval_nom, dist_groupe) in dict_distance:
-        taux_dist = dict_distance[(cheval_nom, dist_groupe)]['taux_victoire']
+        if (cheval_nom, jockey_actuel) in dict_jockey:
+            taux_jockey = dict_jockey[(cheval_nom, jockey_actuel)]['taux_victoire']
+            
+        if (cheval_nom, entraineur_actuel) in dict_entraineur:
+            taux_entraineur = dict_entraineur[(cheval_nom, entraineur_actuel)]['taux_victoire']
+            
+        if (cheval_nom, dist_groupe) in dict_distance:
+            taux_dist = dict_distance[(cheval_nom, dist_groupe)]['taux_victoire']
 
-    # Calcul du score forme
-    musique = str(row.get('Musique', ''))
-    chiffres = re.findall(r'\d+', musique)
-    score_forme = 10
-    if chiffres:
-        scores = []
-        for c in chiffres[:5]:
-            val = int(c)
-            if val == 1: scores.append(20)
-            elif val == 2: scores.append(16)
-            elif val == 3: scores.append(13)
-            elif val == 4: scores.append(10)
-            else: scores.append(6)
-        score_forme = np.mean(scores)
+        # Calcul du score forme
+        musique = str(row.get('Musique', ''))
+        chiffres = re.findall(r'\d+', musique)
+        score_forme = 10
+        if chiffres:
+            scores = []
+            for c in chiffres[:5]:
+                val = int(c)
+                if val == 1: scores.append(20)
+                elif val == 2: scores.append(16)
+                elif val == 3: scores.append(13)
+                elif val == 4: scores.append(10)
+                else: scores.append(6)
+            score_forme = np.mean(scores)
 
-    # Construction des features
-    features = {
-        'Cote': float(row.get('Cote', 10)),
-        'Poids': float(row.get('Poids', 0)),
-        'Corde': float(row.get('Corde', 0)),
-        'Nb_Partants': float(row.get('Nb_Partants', 16)),
-        'Score_Forme': score_forme,
-        'Taux_victoire_jockey': taux_jockey,
-        'Taux_victoire_entraineur': taux_entraineur,
-        'Taux_victoire_dist': taux_dist
-    }
+        # Construction des features
+        features = {
+            'Cote': float(row.get('Cote', 10)),
+            'Poids': float(row.get('Poids', 0)),
+            'Corde': float(row.get('Corde', 0)),
+            'Nb_Partants': float(row.get('Nb_Partants', 16)),
+            'Score_Forme': score_forme,
+            'Taux_victoire_jockey': taux_jockey,
+            'Taux_victoire_entraineur': taux_entraineur,
+            'Taux_victoire_dist': taux_dist
+        }
 
-    # Prédiction
-    import pandas as pd
-    df_input = pd.DataFrame([features])
-    proba = model_ml.predict_proba(df_input)[0][1]
-    return round(proba * 100, 1)
+        # Prédiction
+        import pandas as pd
+        df_input = pd.DataFrame([features])
+        proba = model_ml.predict_proba(df_input)[0][1]
+        return round(proba * 100, 1)
+    except Exception as e:
+        # En cas d'erreur, on retourne 0
+        return 0.0
 
 df = load_data()
+
+# Debug : afficher l'état du modèle
+if model_ml is not None:
+    st.sidebar.write(f"📊 Modèle chargé avec {len(dict_jockey)} couples jockey")
+    st.sidebar.write(f"📊 {len(dict_entraineur)} couples entraîneur")
+    st.sidebar.write(f"📊 {len(dict_distance)} couples distance")
 
 # ==========================================
 # CHARGEMENT DES TABLES DE STATISTIQUES
