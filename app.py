@@ -21,34 +21,30 @@ def load_data():
             st.sidebar.success(f"✅ Courses du jour: {len(df_today)} lignes")
             df = pd.concat([df_historique, df_today], ignore_index=True)
         except Exception as e:
-            st.sidebar.error(f"❌ Erreur courses du jour: {e}")
+            st.sidebar.error(f" Erreur courses du jour: {e}")
             df = df_historique
         
-        # Nettoyage des dates et textes
+        # Nettoyage des dates
         if 'Date' in df.columns:
             df['Date'] = df['Date'].astype(str).str.strip()
         
         # Nettoyage agressif des noms (enlève espaces, caractères invisibles, etc.)
-for col in ['Cheval', 'Hippo', 'Jockey', 'Entraîneur']:
-    if col in df.columns:
-        df[col] = df[col].astype(str).str.strip()
-        # Enlève les espaces insécables et caractères Unicode invisibles
-        df[col] = df[col].str.replace('\u00a0', ' ', regex=False)  # espace insécable
-        df[col] = df[col].str.replace('\u200b', '', regex=False)   # zero-width space
-        df[col] = df[col].str.replace('\u200c', '', regex=False)   # zero-width non-joiner
-        df[col] = df[col].str.replace('\u200d', '', regex=False)   # zero-width joiner
-        df[col] = df[col].str.replace('\ufeff', '', regex=False)   # BOM
-        df[col] = df[col].str.strip()  # Re-strip après nettoyage
+        for col in ['Cheval', 'Hippo', 'Jockey', 'Entraîneur']:
+            if col in df.columns:
+                df[col] = df[col].astype(str).str.strip()
+                # Enlève les espaces insécables et caractères Unicode invisibles
+                df[col] = df[col].str.replace('\u00a0', ' ', regex=False)  # espace insécable
+                df[col] = df[col].str.replace('\u200b', '', regex=False)   # zero-width space
+                df[col] = df[col].str.replace('\u200c', '', regex=False)   # zero-width non-joiner
+                df[col] = df[col].str.replace('\u200d', '', regex=False)   # zero-width joiner
+                df[col] = df[col].str.replace('\ufeff', '', regex=False)   # BOM
+                df[col] = df[col].str.strip()  # Re-strip après nettoyage
         
         # 🛠️ CORRECTION AGRESSIVE DES COTES
         if 'Cote' in df.columns:
-            # 1. On s'assure que c'est du texte
             df['Cote'] = df['Cote'].astype(str)
-            # 2. On enlève les guillemets et les espaces
             df['Cote'] = df['Cote'].str.replace('"', '', regex=False).str.strip()
-            # 3. On remplace la virgule par un point
             df['Cote'] = df['Cote'].str.replace(',', '.', regex=False)
-            # 4. On convertit en nombre décimal (float). Les erreurs deviennent 0.0
             df['Cote'] = pd.to_numeric(df['Cote'], errors='coerce').fillna(0.0)
             st.sidebar.success(f"✅ Cotes corrigées (Moyenne: {df['Cote'].mean():.2f})")
         
@@ -56,6 +52,11 @@ for col in ['Cheval', 'Hippo', 'Jockey', 'Entraîneur']:
         for col in ['Dist', 'Nb_Partants', 'Num_PMU', 'Âge', 'Poids', 'Corde', 'Classement', 'Gains_Car', 'Réu', 'Course']:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
+        
+        #  OPTIMISATION : Nettoyer les noms UNE SEULE FOIS au chargement
+        df["Cheval_clean"] = df["Cheval"].apply(nettoyer_nom)
+        df["Jockey_clean"] = df["Jockey"].apply(nettoyer_nom) if "Jockey" in df.columns else ""
+        df["Entraîneur_clean"] = df["Entraîneur"].apply(nettoyer_nom) if "Entraîneur" in df.columns else ""
         
         return df
     except Exception as e:
@@ -73,7 +74,7 @@ def calculer_score_ameliore(row, df_global, df_course):
     jockey_actuel = nettoyer_nom(row.get('Jockey', ''))
     entraineur_actuel = nettoyer_nom(row.get('Entraîneur', ''))
     
-    hist_cheval = df_global[df_global['Cheval'].apply(nettoyer_nom) == cheval_nom]
+    hist_cheval = df_global[df_global['Cheval_clean'] == cheval_nom]
     
     # 1. FORME (20 pts)
     musique = str(row.get('Musique', ''))
@@ -94,14 +95,14 @@ def calculer_score_ameliore(row, df_global, df_course):
     # 2. JOCKEY / ENTRAÎNEUR (25 pts)
     if jockey_actuel != "":
         victoires_jockey = len(hist_cheval[
-            (hist_cheval['Jockey'].apply(nettoyer_nom) == jockey_actuel) & 
+            (hist_cheval['Jockey_clean'] == jockey_actuel) & 
             (hist_cheval['Classement'] == 1)
         ])
         score += min(12.5, victoires_jockey * 5)
     
     if entraineur_actuel != "":
         victoires_entraineur = len(hist_cheval[
-            (hist_cheval['Entraîneur'].apply(nettoyer_nom) == entraineur_actuel) & 
+            (hist_cheval['Entraîneur_clean'] == entraineur_actuel) & 
             (hist_cheval['Classement'] == 1)
         ])
         score += min(12.5, victoires_entraineur * 5)
