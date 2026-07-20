@@ -162,29 +162,19 @@ df = load_data()
 
 import pandas as pd
 
-st.write("### 🔍 Test Pandas : CAPABLE est-il dans le DataFrame ?")
+st.write("###  VRAIES COLONNES DU CSV")
 
-# Lit le CSV avec Pandas (comme dans load_data)
 try:
-    df_test = pd.read_csv(URL_CSV, on_bad_lines='skip', dtype={'Date': str, 'Cote': str})
-    st.write(f"✅ CSV lu : {len(df_test)} lignes")
+    # On lit juste les 5 premières lignes pour aller vite
+    df_test = pd.read_csv(URL_CSV, on_bad_lines='skip', dtype=str, nrows=5)
+    st.write(f"✅ CSV lu. Nombre de colonnes détectées : {len(df_test.columns)}")
     
-    # Cherche CAPABLE
-    capable_in_df = df_test[df_test['Cheval'].astype(str).str.upper() == 'CAPABLE']
-    st.write(f"🔍 CAPABLE trouvé dans DataFrame Pandas : {len(capable_in_df)} fois")
-    
-    if len(capable_in_df) > 0:
-        st.success("✅ CAPABLE est bien dans le DataFrame !")
-        st.dataframe(capable_in_df[['Date', 'Hippo', 'Cheval', 'Jockey']].head())
-    else:
-        st.error("❌ CAPABLE n'est PAS dans le DataFrame Pandas !")
+    # Affiche les noms exacts des colonnes
+    st.write("👀 Noms des colonnes détectés par Python :")
+    for i, col in enumerate(df_test.columns):
+        # On affiche la longueur pour voir les espaces invisibles
+        st.write(f"{i+1}. '{col}' (longueur: {len(col)})")
         
-        # Cherche les lignes qui contiennent "CAP" pour voir ce qui est lu
-        cap_in_df = df_test[df_test['Cheval'].astype(str).str.upper().str.contains('CAP', na=False)]
-        st.write(f"🔍 Chevaux contenant 'CAP' dans DataFrame : {len(cap_in_df)}")
-        if len(cap_in_df) > 0:
-            st.write("Noms trouvés:", cap_in_df['Cheval'].unique())
-            
 except Exception as e:
     st.error(f"Erreur: {e}")
 
