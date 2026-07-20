@@ -88,9 +88,9 @@ def calculer_score_ameliore(row, df_global, df_course):
     jockey_actuel = nettoyer_nom(row.get('Jockey', ''))
     entraineur_actuel = nettoyer_nom(row.get('Entraîneur', ''))
     
-    hist_cheval = df_global[df_global['Cheval_clean'] == cheval_nom]
-    
-    # 1. FORME (20 pts)
+    # ==========================================
+    # 1. FORME RÉCENTE (20 pts) - Inchangé
+    # ==========================================
     musique = str(row.get('Musique', ''))
     chiffres = re.findall(r'\d+', musique)
     if chiffres:
@@ -106,30 +106,60 @@ def calculer_score_ameliore(row, df_global, df_course):
     else:
         score += 10 
 
-    # 2. JOCKEY / ENTRAÎNEUR (25 pts)
-    if jockey_actuel != "":
-        victoires_jockey = len(hist_cheval[
-            (hist_cheval['Jockey_clean'] == jockey_actuel) & 
-            (hist_cheval['Classement'] == 1)
-        ])
-        score += min(12.5, victoires_jockey * 5)
+    # ==========================================
+    # 2. COUPLE JOCKEY / ENTRAÎNEUR (25 pts) - BASÉ SUR LES TAUX
+    # ==========================================
+    # Score Jockey (max 12.5 pts)
+    if jockey_actuel != "" and cheval_nom != "":
+        key_jockey = (cheval_nom, jockey_actuel)
+        if key_jockey in dict_jockey:
+            stats = dict_jockey[key_jockey]
+            # Formule : 60% taux podium + 40% taux victoire, pondéré par nb de courses
+            if stats['courses'] >= 3:  # Au moins 3 courses ensemble pour être significatif
+                score_jockey = (stats['taux_podium'] * 0.6 + stats['taux_victoire'] * 0.4) / 100 * 12.5
+                # Bonus si beaucoup de courses ensemble (fiabilité)
+                fiabilite = min(1.0, stats['courses'] / 10)
+                score += score_jockey * fiabilite
+            else:
+                score += 3  # Score neutre si peu de données
     
-    if entraineur_actuel != "":
-        victoires_entraineur = len(hist_cheval[
-            (hist_cheval['Entraîneur_clean'] == entraineur_actuel) & 
-            (hist_cheval['Classement'] == 1)
-        ])
-        score += min(12.5, victoires_entraineur * 5)
+    # Score Entraîneur (max 12.5 pts)
+    if entraineur_actuel != "" and cheval_nom != "":
+        key_entraineur = (cheval_nom, entraineur_actuel)
+        if key_entraineur in dict_entraineur:
+            stats = dict_entraineur[key_entraineur]
+            if stats['courses'] >= 3:
+                score_entraineur = (stats['taux_podium'] * 0.6 + stats['taux_victoire'] * 0.4) / 100 * 12.5
+                fiabilite = min(1.0, stats['courses'] / 10)
+                score += score_entraineur * fiabilite
+            else:
+                score += 3
 
-    # 3. DISTANCE (15 pts)
-    dist_min = dist_actuelle - 200
-    dist_max = dist_actuelle + 200
-    hist_distance = hist_cheval[(hist_cheval['Dist'] >= dist_min) & (hist_cheval['Dist'] <= dist_max)]
-    victoires_dist = len(hist_distance[hist_distance['Classement'] == 1])
-    podiums_dist = len(hist_distance[(hist_distance['Classement'] >= 1) & (hist_distance['Classement'] <= 3)])
-    score += min(15, (victoires_dist * 10) + (podiums_dist * 3))
+    # ==========================================
+    # 3. AFFINITÉ DISTANCE (15 pts) - BASÉ SUR LES TAUX
+    # ==========================================
+    # On cherche la tranche de distance la plus proche (±200m)
+    dist_groupe = int((dist_actuelle // 200) * 200)
+    
+    # On teste 3 tranches : la tranche exacte, -200m, +200m
+    meilleure_stats = None
+    for dist_test in [dist_groupe - 200, dist_groupe, dist_groupe + 200]:
+        key_dist = (cheval_nom, dist_test)
+        if key_dist in dict_distance:
+            stats = dict_distance[key_dist]
+            if meilleure_stats is None or stats['courses'] > meilleure_stats['courses']:
+                meilleure_stats = stats
+    
+    if meilleure_stats and meilleure_stats['courses'] >= 2:
+        score_distance = (meilleure_stats['taux_podium'] * 0.6 + meilleure_stats['taux_victoire'] * 0.4) / 100 * 15
+        fiabilite = min(1.0, meilleure_stats['courses'] / 8)
+        score += score_distance * fiabilite
+    else:
+        score += 5  # Score neutre
 
-    # 4. GAINS (15 pts)
+    # ==========================================
+    # 4. GAINS CARRIÈRE (15 pts)
+    # ==========================================
     gains = float(row.get('Gains_Car', 0))
     gains_max = df_course['Gains_Car'].max() if 'Gains_Car' in df_course.columns else 0
     if gains > 0 and gains_max > 0:
@@ -138,7 +168,9 @@ def calculer_score_ameliore(row, df_global, df_course):
     else:
         score += 7.5
 
+    # ==========================================
     # 5. POIDS (10 pts)
+    # ==========================================
     poids = float(row.get('Poids', 0))
     poids_moyen = df_course['Poids'].mean() if 'Poids' in df_course.columns else 0
     if poids > 0 and poids_moyen > 0:
@@ -148,7 +180,9 @@ def calculer_score_ameliore(row, df_global, df_course):
     else:
         score += 5
 
+    # ==========================================
     # 6. CORDE (10 pts)
+    # ==========================================
     corde = float(row.get('Corde', 0))
     nb_partants = float(row.get('Nb_Partants', 16))
     if corde > 0 and nb_partants > 0:
@@ -158,7 +192,9 @@ def calculer_score_ameliore(row, df_global, df_course):
     else:
         score += 5
 
-    # 7. COTE (5 pts) - Conversion forcée en float ici aussi pour être sûr
+    # ==========================================
+    # 7. COTE (5 pts)
+    # ==========================================
     cote = float(row.get('Cote', 0.0))
     if cote > 0:
         if cote <= 3: score_cote = 100
@@ -173,6 +209,77 @@ def calculer_score_ameliore(row, df_global, df_course):
     return round(min(100, max(0, score)), 1)
 
 df = load_data()
+
+# ==========================================
+# CHARGEMENT DES TABLES DE STATISTIQUES
+# ==========================================
+st.sidebar.info("📊 Chargement des stats pré-calculées...")
+
+# Fonction pour charger un CSV de stats avec gestion d'erreur
+def charger_stats(nom_fichier):
+    try:
+        return pd.read_csv(nom_fichier, sep=';', dtype={'Cheval_clean': str, 'Jockey_clean': str, 'Entraîneur_clean': str})
+    except Exception as e:
+        st.sidebar.warning(f"⚠️ {nom_fichier} non trouvé")
+        return pd.DataFrame()
+
+stats_chevaux = charger_stats('stats_chevaux.csv')
+stats_jockey = charger_stats('stats_jockey.csv')
+stats_entraineur = charger_stats('stats_entraineur.csv')
+stats_distance = charger_stats('stats_distance.csv')
+
+# Création de dictionnaires pour accès ultra-rapide (O(1))
+dict_chevaux = {}
+if not stats_chevaux.empty:
+    for _, row in stats_chevaux.iterrows():
+        dict_chevaux[row['Cheval_clean']] = {
+            'courses': int(row['Courses']),
+            'victoires': int(row['Victoires']),
+            'podiums': int(row['Podiums']),
+            'taux_victoire': float(row['Taux_victoire']),
+            'taux_podium': float(row['Taux_podium'])
+        }
+
+dict_jockey = {}
+if not stats_jockey.empty:
+    for _, row in stats_jockey.iterrows():
+        key = (row['Cheval_clean'], row['Jockey_clean'])
+        dict_jockey[key] = {
+            'courses': int(row['Courses']),
+            'victoires': int(row['Victoires']),
+            'podiums': int(row['Podiums']),
+            'taux_victoire': float(row['Taux_victoire']),
+            'taux_podium': float(row['Taux_podium'])
+        }
+
+dict_entraineur = {}
+if not stats_entraineur.empty:
+    for _, row in stats_entraineur.iterrows():
+        key = (row['Cheval_clean'], row['Entraîneur_clean'])
+        dict_entraineur[key] = {
+            'courses': int(row['Courses']),
+            'victoires': int(row['Victoires']),
+            'podiums': int(row['Podiums']),
+            'taux_victoire': float(row['Taux_victoire']),
+            'taux_podium': float(row['Taux_podium'])
+        }
+
+dict_distance = {}
+if not stats_distance.empty:
+    for _, row in stats_distance.iterrows():
+        key = (row['Cheval_clean'], int(row['Distance']))
+        dict_distance[key] = {
+            'courses': int(row['Courses']),
+            'victoires': int(row['Victoires']),
+            'podiums': int(row['Podiums']),
+            'taux_victoire': float(row['Taux_victoire']),
+            'taux_podium': float(row['Taux_podium'])
+        }
+
+st.sidebar.success(f"✅ {len(dict_chevaux)} chevaux en mémoire")
+st.sidebar.success(f"✅ {len(dict_jockey)} couples jockey")
+st.sidebar.success(f"✅ {len(dict_entraineur)} couples entraîneur")
+st.sidebar.success(f"✅ {len(dict_distance)} couples distance")
 
 if 'selected_date' not in st.session_state:
     st.session_state.selected_date = None
