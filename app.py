@@ -160,39 +160,31 @@ def calculer_score_ameliore(row, df_global, df_course):
 
 df = load_data()
 
-import urllib.request
+import pandas as pd
 
-st.write("### 🔍 Analyse des colonnes du CSV")
+st.write("### 🔍 Test Pandas : CAPABLE est-il dans le DataFrame ?")
+
+# Lit le CSV avec Pandas (comme dans load_data)
 try:
-    response = urllib.request.urlopen(URL_CSV)
-    raw_text = response.read().decode('utf-8', errors='ignore')
-    lines = raw_text.split('\n')
+    df_test = pd.read_csv(URL_CSV, on_bad_lines='skip', dtype={'Date': str, 'Cote': str})
+    st.write(f"✅ CSV lu : {len(df_test)} lignes")
     
-    # Compte les virgules de chaque ligne
-    col_counts = {}
-    bad_lines = []
+    # Cherche CAPABLE
+    capable_in_df = df_test[df_test['Cheval'].astype(str).str.upper() == 'CAPABLE']
+    st.write(f"🔍 CAPABLE trouvé dans DataFrame Pandas : {len(capable_in_df)} fois")
     
-    for i, line in enumerate(lines[:1000]):  # Analyse les 1000 premières lignes
-        if line.strip():
-            nb_virgules = line.count(',')
-            col_counts[nb_virgules] = col_counts.get(nb_virgules, 0) + 1
-            
-            # Si une ligne n'a pas 20 virgules (21 colonnes), c'est suspect
-            if nb_virgules != 20:
-                bad_lines.append((i, nb_virgules, line[:100]))
-    
-    st.write(f"📊 Distribution du nombre de virgules dans les 1000 premières lignes :")
-    for nb_virg, count in sorted(col_counts.items()):
-        st.write(f"  - {nb_virg} virgules ({nb_virg+1} colonnes) : {count} lignes")
-    
-    if bad_lines:
-        st.warning(f"⚠️ {len(bad_lines)} lignes ont un nombre de colonnes incorrect !")
-        st.write("Voici les 5 premières lignes problématiques :")
-        for idx, nb_virg, line in bad_lines[:5]:
-            st.write(f"Ligne {idx}: {nb_virg} virgules → `{line}`")
+    if len(capable_in_df) > 0:
+        st.success("✅ CAPABLE est bien dans le DataFrame !")
+        st.dataframe(capable_in_df[['Date', 'Hippo', 'Cheval', 'Jockey']].head())
     else:
-        st.success("✅ Toutes les lignes ont 20 virgules (21 colonnes)")
+        st.error("❌ CAPABLE n'est PAS dans le DataFrame Pandas !")
         
+        # Cherche les lignes qui contiennent "CAP" pour voir ce qui est lu
+        cap_in_df = df_test[df_test['Cheval'].astype(str).str.upper().str.contains('CAP', na=False)]
+        st.write(f"🔍 Chevaux contenant 'CAP' dans DataFrame : {len(cap_in_df)}")
+        if len(cap_in_df) > 0:
+            st.write("Noms trouvés:", cap_in_df['Cheval'].unique())
+            
 except Exception as e:
     st.error(f"Erreur: {e}")
 
