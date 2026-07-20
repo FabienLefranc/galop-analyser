@@ -160,24 +160,25 @@ def calculer_score_ameliore(row, df_global, df_course):
 
 df = load_data()
 
-# 🔍 DEBUG ULTIME - Inspection de CAPABLE
-if 'CAPABLE' in str(df['Cheval'].values[:100]):
-    st.warning("✅ CAPABLE trouvé dans les 100 premières lignes")
-else:
-    st.error("❌ CAPABLE NON trouvé dans les 100 premières lignes")
-    
-# Affiche les 10 premiers noms de chevaux
-st.write("📋 Exemples de noms dans la base:")
-for i, nom in enumerate(df['Cheval'].head(20).unique()):
-    if i < 10:
-        nom_str = str(nom)  # ⭐ Conversion sûre en string
-        st.write(f"{i+1}. '{nom_str}' (longueur: {len(nom_str)}, bytes: {nom_str.encode('utf-8')})")
+import urllib.request
 
-# Cherche CAPABLE de manière très large
-results_test = df[df['Cheval'].str.contains('CAP', na=False, case=False)]
-st.write(f"🔍 Chevaux contenant 'CAP': {len(results_test)}")
-if len(results_test) > 0:
-    st.write(results_test['Cheval'].unique()[:10])
+st.write("### 🔍 Lecture brute du CSV (sans Pandas)")
+try:
+    response = urllib.request.urlopen(URL_CSV)
+    # On lit le fichier texte brut
+    raw_text = response.read().decode('utf-8', errors='ignore')
+    lines = raw_text.split('\n')
+    
+    # On cherche toutes les lignes qui contiennent CAPABLE
+    capable_lines = [line for line in lines if 'CAPABLE' in line.upper()]
+    st.write(f"🔍 Nombre de lignes brutes contenant 'CAPABLE' : {len(capable_lines)}")
+    
+    if capable_lines:
+        st.write("👀 Voici à quoi ressemble la première ligne brute de CAPABLE :")
+        st.code(capable_lines[0])
+        st.info("💡 *Regarde bien s'il y a une virgule bizarre ou un guillemet mal placé dans cette ligne !*")
+except Exception as e:
+    st.error(f"Erreur de lecture brute: {e}")
 
 if 'selected_date' not in st.session_state:
     st.session_state.selected_date = None
