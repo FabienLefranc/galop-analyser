@@ -81,6 +81,50 @@ def nettoyer_nom(nom):
     if pd.isna(nom): return ""
     return re.sub(r'[\s\.]', '', str(nom)).upper()
 
+def calculer_regularite(musique):
+    """
+    Calcule un score de régularité de 0 à 10
+    10 = très régulier (ex: 2-3-2-3-2)
+    0 = très irrégulier (ex: 1-12-1-15-2)
+    """
+    chiffres = re.findall(r'\d+', musique)
+    if len(chiffres) < 3:
+        return 5  # Pas assez de données → score neutre
+    
+    positions = [int(c) for c in chiffres[:5]]
+    ecart_type = np.std(positions)
+    
+    # Si écart_type = 0 (parfaitement régulier) → 10 pts
+    # Si écart_type = 5 (très irrégulier) → 0 pts
+    score = max(0, 10 - (ecart_type * 2))
+    return round(score, 1)
+
+def calculer_progression(musique):
+    """
+    Calcule un score de progression de -10 à +10
+    +10 = en nette progression (ex: 8-6-4-2-1)
+    -10 = en déclin (ex: 1-2-4-6-8)
+    0 = stable
+    """
+    chiffres = re.findall(r'\d+', musique)
+    if len(chiffres) < 3:
+        return 0  # Pas assez de données
+    
+    # On prend les 3 dernières courses (les plus récentes)
+    dernieres_3 = [int(c) for c in chiffres[:3]]
+    
+    # Régression linéaire simple
+    if len(dernieres_3) >= 2:
+        x = range(len(dernieres_3))
+        tendance = np.polyfit(x, dernieres_3, 1)[0]
+        
+        # tendance < 0 = progression (positions qui diminuent)
+        # tendance > 0 = déclin (positions qui augmentent)
+        score = max(-10, min(10, -tendance * 5))
+        return round(score, 1)
+    
+    return 0
+
 def calculer_score_ameliore(row, df_global, df_course):
     score = 0
     cheval_nom = nettoyer_nom(row.get('Cheval', ''))
@@ -89,7 +133,7 @@ def calculer_score_ameliore(row, df_global, df_course):
     entraineur_actuel = nettoyer_nom(row.get('Entraîneur', ''))
     
     # ==========================================
-    # 1. FORME RÉCENTE (20 pts) - Inchangé
+    # 1. FORME RÉCENTE (15 pts) - Réduit de 20 à 15
     # ==========================================
     musique = str(row.get('Musique', ''))
     chiffres = re.findall(r'\d+', musique)
@@ -102,28 +146,38 @@ def calculer_score_ameliore(row, df_global, df_course):
             elif val == 3: scores_forme.append(65)
             elif val == 4: scores_forme.append(50)
             else: scores_forme.append(30)
-        score += (np.mean(scores_forme) / 100) * 20
+        score += (np.mean(scores_forme) / 100) * 15
     else:
-        score += 10 
+        score += 7.5 
 
     # ==========================================
-    # 2. COUPLE JOCKEY / ENTRAÎNEUR (25 pts) - BASÉ SUR LES TAUX
+    # 2. RÉGULARITÉ (5 pts) - NOUVEAU
     # ==========================================
-    # Score Jockey (max 12.5 pts)
+    regularite = calculer_regularite(musique)
+    score += (regularite / 10) * 5
+
+    # ==========================================
+    # 3. PROGRESSION (5 pts) - NOUVEAU
+    # ==========================================
+    progression = calculer_progression(musique)
+    # On convertit -10/+10 en 0-10 puis en points
+    score_progression = max(0, min(10, progression + 10)) / 10 * 5
+    score += score_progression
+
+    # ==========================================
+    # 4. COUPLE JOCKEY / ENTRAÎNEUR (25 pts)
+    # ==========================================
     if jockey_actuel != "" and cheval_nom != "":
         key_jockey = (cheval_nom, jockey_actuel)
         if key_jockey in dict_jockey:
             stats = dict_jockey[key_jockey]
-            # Formule : 60% taux podium + 40% taux victoire, pondéré par nb de courses
-            if stats['courses'] >= 3:  # Au moins 3 courses ensemble pour être significatif
+            if stats['courses'] >= 3:
                 score_jockey = (stats['taux_podium'] * 0.6 + stats['taux_victoire'] * 0.4) / 100 * 12.5
-                # Bonus si beaucoup de courses ensemble (fiabilité)
                 fiabilite = min(1.0, stats['courses'] / 10)
                 score += score_jockey * fiabilite
             else:
-                score += 3  # Score neutre si peu de données
+                score += 3
     
-    # Score Entraîneur (max 12.5 pts)
     if entraineur_actuel != "" and cheval_nom != "":
         key_entraineur = (cheval_nom, entraineur_actuel)
         if key_entraineur in dict_entraineur:
@@ -136,12 +190,10 @@ def calculer_score_ameliore(row, df_global, df_course):
                 score += 3
 
     # ==========================================
-    # 3. AFFINITÉ DISTANCE (15 pts) - BASÉ SUR LES TAUX
+    # 5. AFFINITÉ DISTANCE (15 pts)
     # ==========================================
-    # On cherche la tranche de distance la plus proche (±200m)
     dist_groupe = int((dist_actuelle // 200) * 200)
     
-    # On teste 3 tranches : la tranche exacte, -200m, +200m
     meilleure_stats = None
     for dist_test in [dist_groupe - 200, dist_groupe, dist_groupe + 200]:
         key_dist = (cheval_nom, dist_test)
@@ -155,10 +207,10 @@ def calculer_score_ameliore(row, df_global, df_course):
         fiabilite = min(1.0, meilleure_stats['courses'] / 8)
         score += score_distance * fiabilite
     else:
-        score += 5  # Score neutre
+        score += 5
 
     # ==========================================
-    # 4. GAINS CARRIÈRE (15 pts)
+    # 6. GAINS CARRIÈRE (15 pts)
     # ==========================================
     gains = float(row.get('Gains_Car', 0))
     gains_max = df_course['Gains_Car'].max() if 'Gains_Car' in df_course.columns else 0
@@ -169,7 +221,7 @@ def calculer_score_ameliore(row, df_global, df_course):
         score += 7.5
 
     # ==========================================
-    # 5. POIDS (10 pts)
+    # 7. POIDS (10 pts)
     # ==========================================
     poids = float(row.get('Poids', 0))
     poids_moyen = df_course['Poids'].mean() if 'Poids' in df_course.columns else 0
@@ -181,7 +233,7 @@ def calculer_score_ameliore(row, df_global, df_course):
         score += 5
 
     # ==========================================
-    # 6. CORDE (10 pts)
+    # 8. CORDE (10 pts)
     # ==========================================
     corde = float(row.get('Corde', 0))
     nb_partants = float(row.get('Nb_Partants', 16))
@@ -193,7 +245,7 @@ def calculer_score_ameliore(row, df_global, df_course):
         score += 5
 
     # ==========================================
-    # 7. COTE (5 pts)
+    # 9. COTE (5 pts)
     # ==========================================
     cote = float(row.get('Cote', 0.0))
     if cote > 0:
