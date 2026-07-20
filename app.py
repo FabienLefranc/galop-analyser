@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import numpy as np
+import xgboost as xgb
 import re
 from datetime import datetime
 
@@ -260,6 +261,64 @@ def calculer_score_ameliore(row, df_global, df_course):
     
     return round(min(100, max(0, score)), 1)
 
+def predire_proba_ml(row):
+    """Calcule la probabilité de victoire avec le modèle IA"""
+    if model_ml is None: 
+        return 0.0
+    
+    cheval_nom = nettoyer_nom(row.get('Cheval', ''))
+    jockey_actuel = nettoyer_nom(row.get('Jockey', ''))
+    entraineur_actuel = nettoyer_nom(row.get('Entraîneur', ''))
+    dist_actuelle = float(row.get('Dist', 0))
+    dist_groupe = int((dist_actuelle // 200) * 200)
+    
+    # Récupération des stats
+    taux_jockey = 0
+    taux_entraineur = 0
+    taux_dist = 0
+    
+    if (cheval_nom, jockey_actuel) in dict_jockey:
+        taux_jockey = dict_jockey[(cheval_nom, jockey_actuel)]['taux_victoire']
+        
+    if (cheval_nom, entraineur_actuel) in dict_entraineur:
+        taux_entraineur = dict_entraineur[(cheval_nom, entraineur_actuel)]['taux_victoire']
+        
+    if (cheval_nom, dist_groupe) in dict_distance:
+        taux_dist = dict_distance[(cheval_nom, dist_groupe)]['taux_victoire']
+
+    # Calcul du score forme
+    musique = str(row.get('Musique', ''))
+    chiffres = re.findall(r'\d+', musique)
+    score_forme = 10
+    if chiffres:
+        scores = []
+        for c in chiffres[:5]:
+            val = int(c)
+            if val == 1: scores.append(20)
+            elif val == 2: scores.append(16)
+            elif val == 3: scores.append(13)
+            elif val == 4: scores.append(10)
+            else: scores.append(6)
+        score_forme = np.mean(scores)
+
+    # Construction des features
+    features = {
+        'Cote': float(row.get('Cote', 10)),
+        'Poids': float(row.get('Poids', 0)),
+        'Corde': float(row.get('Corde', 0)),
+        'Nb_Partants': float(row.get('Nb_Partants', 16)),
+        'Score_Forme': score_forme,
+        'Taux_victoire_jockey': taux_jockey,
+        'Taux_victoire_entraineur': taux_entraineur,
+        'Taux_victoire_dist': taux_dist
+    }
+
+    # Prédiction
+    import pandas as pd
+    df_input = pd.DataFrame([features])
+    proba = model_ml.predict_proba(df_input)[0][1]
+    return round(proba * 100, 1)
+
 df = load_data()
 
 # ==========================================
@@ -332,6 +391,14 @@ st.sidebar.success(f"✅ {len(dict_chevaux)} chevaux en mémoire")
 st.sidebar.success(f"✅ {len(dict_jockey)} couples jockey")
 st.sidebar.success(f"✅ {len(dict_entraineur)} couples entraîneur")
 st.sidebar.success(f"✅ {len(dict_distance)} couples distance")
+# Chargement du modèle Machine Learning
+try:
+    model_ml = xgb.XGBClassifier()
+    model_ml.load_model('modele_galop.json')
+    st.sidebar.success("✅ Modèle IA chargé")
+except Exception as e:
+    st.sidebar.warning("⚠️ Modèle IA non trouvé")
+    model_ml = None
 
 if 'selected_date' not in st.session_state:
     st.session_state.selected_date = None
@@ -520,11 +587,12 @@ elif page == "🎯 Score prédictif":
             st.success(f"✅ Course du **{st.session_state.selected_date}**")
             
             parts["Score"] = parts.apply(lambda row: calculer_score_ameliore(row, df, parts), axis=1)
+            parts["Proba_IA"] = parts.apply(lambda row: predire_proba_ml(row), axis=1)
             parts = parts.sort_values("Score", ascending=False)
             parts["Rang"] = range(1, len(parts)+1)
             
             st.subheader("🏆 Classement")
-            st.dataframe(parts[["Rang", "Num_PMU", "Cheval", "Score", "Cote", "Musique"]], use_container_width=True)
+            st.dataframe(parts[["Rang", "Num_PMU", "Cheval", "Score", "Proba_IA", "Cote", "Musique"]], use_container_width=True)
             
             fig = px.bar(parts, x="Cheval", y="Score", color="Score", color_continuous_scale="Viridis")
             st.plotly_chart(fig, use_container_width=True)
