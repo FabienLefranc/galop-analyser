@@ -497,52 +497,32 @@ elif page == "📋 Résumé du jour":
                 parts["Proba_Norm"] = normaliser_probas_course(parts)
                 parts["Score_Combine"] = parts.apply(calculer_score_combine, axis=1)
                 
-                # Top 3 par Score classique
-                parts_score = parts.sort_values("Score", ascending=False).head(3)
-                # Top 3 par Proba IA
-                parts_ia = parts.sort_values("Proba_Norm", ascending=False).head(3)
-                # Top 3 par Score Combiné
-                parts_combine = parts.sort_values("Score_Combine", ascending=False).head(3)
-                
-                for i, (_, cheval) in enumerate(parts_score.iterrows()):
-                    recap_data.append({
-                        "Hippodrome": hippo,
-                        "Course": f"R{reu}C{num_course}",
-                        "Distance": f"{dist}m",
-                        "Rang": i + 1,
-                        "Num": int(cheval["Num_PMU"]),
-                        "Cheval": cheval["Cheval"],
-                        "Score": float(cheval["Score"]),
-                        "Proba_Norm": float(cheval["Proba_Norm"]),
-                        "Score_Combine": float(cheval["Score_Combine"]),
-                        "Type": "Score"
-                    })
-                for i, (_, cheval) in enumerate(parts_ia.iterrows()):
-                    recap_data.append({
-                        "Hippodrome": hippo,
-                        "Course": f"R{reu}C{num_course}",
-                        "Distance": f"{dist}m",
-                        "Rang": i + 1,
-                        "Num": int(cheval["Num_PMU"]),
-                        "Cheval": cheval["Cheval"],
-                        "Score": float(cheval["Score"]),
-                        "Proba_Norm": float(cheval["Proba_Norm"]),
-                        "Score_Combine": float(cheval["Score_Combine"]),
-                        "Type": "IA"
-                    })
-                for i, (_, cheval) in enumerate(parts_combine.iterrows()):
-                    recap_data.append({
-                        "Hippodrome": hippo,
-                        "Course": f"R{reu}C{num_course}",
-                        "Distance": f"{dist}m",
-                        "Rang": i + 1,
-                        "Num": int(cheval["Num_PMU"]),
-                        "Cheval": cheval["Cheval"],
-                        "Score": float(cheval["Score"]),
-                        "Proba_Norm": float(cheval["Proba_Norm"]),
-                        "Score_Combine": float(cheval["Score_Combine"]),
-                        "Type": "Combine"
-                    })
+                                                                # === TOP 3 SCORE CLASSIQUE ===
+                        st.markdown("#### 📊 Top 3 Score Classique")
+                        col1, col2, col3 = st.columns(3)
+                        data_score = course_data[course_data["Type"] == "Score"].sort_values("Rang")
+                        for i, (_, row) in enumerate(data_score.head(3).iterrows()):
+                            with [col1, col2, col3][i]:
+                                medal = ["🥇", "🥈", ""][i]
+                                st.metric(f"{medal} N°{int(row['Num'])} {row['Cheval']}", f"Score: {row['Score']}")
+                        
+                        # === TOP 3 IA ===
+                        st.markdown("#### 🤖 Top 3 IA")
+                        col1, col2, col3 = st.columns(3)
+                        data_ia = course_data[course_data["Type"] == "IA"].sort_values("Rang")
+                        for i, (_, row) in enumerate(data_ia.head(3).iterrows()):
+                            with [col1, col2, col3][i]:
+                                medal = ["🥇", "🥈", ""][i]
+                                st.metric(f"{medal} N°{int(row['Num'])} {row['Cheval']}", f"Proba: {row['Proba_Norm']:.1f}%")
+                        
+                        # === TOP 3 COMBINÉ ===
+                        st.markdown("#### 🎯 Top 3 Score Combiné")
+                        col1, col2, col3 = st.columns(3)
+                        data_combine = course_data[course_data["Type"] == "Combine"].sort_values("Rang")
+                        for i, (_, row) in enumerate(data_combine.head(3).iterrows()):
+                            with [col1, col2, col3][i]:
+                                medal = ["", "🥈", "🥉"][i]
+                                st.metric(f"{medal} N°{int(row['Num'])} {row['Cheval']}", f"Combine: {row['Score_Combine']}")
         
         if recap_data:
             recap_df = pd.DataFrame(recap_data)
