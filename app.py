@@ -225,7 +225,7 @@ model_ml = None
 try:
     if os.path.exists('modele_galop.json'):
         model_ml = xgb.XGBClassifier()
-        model_ml.load_model('modele_galop.json')
+        model_ml.load_model('modele_galop_v2.json')
         st.sidebar.success("✅ Modèle IA chargé avec succès")
     else:
         st.sidebar.warning("⚠️ Fichier 'modele_galop.json' introuvable")
@@ -236,7 +236,7 @@ except Exception as e:
 # FONCTIONS DE CALCUL DE SCORE
 # ==========================================
 def predire_proba_ml(row):
-    """Calcule la probabilité de victoire avec le modèle IA"""
+    """Calcule la probabilité de victoire avec le modèle IA V2 (21 features)"""
     if model_ml is None: 
         return 0.0
     
@@ -244,15 +244,11 @@ def predire_proba_ml(row):
         cheval_nom = nettoyer_nom(row.get('Cheval', ''))
         jockey_actuel = nettoyer_nom(row.get('Jockey', ''))
         entraineur_actuel = nettoyer_nom(row.get('Entraîneur', ''))
+        hippo_actuel = str(row.get('Hippo', '')).strip()
         dist_actuelle = float(row.get('Dist', 0))
         dist_groupe = int((dist_actuelle // 200) * 200)
         
-        # Récupération des stats avec valeurs par défaut réalistes
-        taux_jockey = dict_jockey.get((cheval_nom, jockey_actuel), {}).get('taux_victoire', 8.5)  # Moyenne historique
-        taux_entraineur = dict_entraineur.get((cheval_nom, entraineur_actuel), {}).get('taux_victoire', 7.2)  # Moyenne historique
-        taux_dist = dict_distance.get((cheval_nom, dist_groupe), {}).get('taux_victoire', 10.5)  # Moyenne historique
-        
-        # Calcul du score forme
+        # 1. Calcul du Score de Forme (d'après la musique)
         musique = str(row.get('Musique', ''))
         chiffres = re.findall(r'\d+', musique)
         score_forme = 10
@@ -267,22 +263,42 @@ def predire_proba_ml(row):
                 else: scores.append(6)
             score_forme = np.mean(scores)
 
-        # Conversion poids grammes → kg
-        poids_kg = float(row.get('Poids', 0)) / 10
-
-        # Construction des features
+        # 2. Construction des 21 features pour le modèle V2
         features = {
             'Cote': float(row.get('Cote', 10)),
-            'Poids': poids_kg,
+            'Poids_kg': float(row.get('Poids', 0)) / 10,
             'Corde': float(row.get('Corde', 0)),
             'Nb_Partants': float(row.get('Nb_Partants', 16)),
+            'Âge': float(row.get('Âge', 0)),
             'Score_Forme': score_forme,
-            'Taux_victoire_jockey': taux_jockey,
-            'Taux_victoire_entraineur': taux_entraineur,
-            'Taux_victoire_dist': taux_dist
+            
+            # Stats Cheval
+            'Courses_cheval': dict_chevaux.get(cheval_nom, {}).get('courses', 0),
+            'Taux_victoire_cheval': dict_chevaux.get(cheval_nom, {}).get('taux_victoire', 0),
+            'Taux_podium_cheval': dict_chevaux.get(cheval_nom, {}).get('taux_podium', 0),
+            
+            # Stats Jockey
+            'Courses_jockey': dict_jockey.get((cheval_nom, jockey_actuel), {}).get('courses', 0),
+            'Taux_victoire_jockey': dict_jockey.get((cheval_nom, jockey_actuel), {}).get('taux_victoire', 0),
+            'Taux_podium_jockey': dict_jockey.get((cheval_nom, jockey_actuel), {}).get('taux_podium', 0),
+            
+            # Stats Entraîneur
+            'Courses_entraineur': dict_entraineur.get((cheval_nom, entraineur_actuel), {}).get('courses', 0),
+            'Taux_victoire_entraineur': dict_entraineur.get((cheval_nom, entraineur_actuel), {}).get('taux_victoire', 0),
+            'Taux_podium_entraineur': dict_entraineur.get((cheval_nom, entraineur_actuel), {}).get('taux_podium', 0),
+            
+            # Stats Distance
+            'Courses_distance': dict_distance.get((cheval_nom, dist_groupe), {}).get('courses', 0),
+            'Taux_victoire_distance': dict_distance.get((cheval_nom, dist_groupe), {}).get('taux_victoire', 0),
+            'Taux_podium_distance': dict_distance.get((cheval_nom, dist_groupe), {}).get('taux_podium', 0),
+            
+            # Stats Hippodrome
+            'Courses_hippo': dict_hippodrome.get((cheval_nom, hippo_actuel), {}).get('courses', 0),
+            'Taux_victoire_hippo': dict_hippodrome.get((cheval_nom, hippo_actuel), {}).get('taux_victoire', 0),
+            'Taux_podium_hippo': dict_hippodrome.get((cheval_nom, hippo_actuel), {}).get('taux_podium', 0)
         }
 
-        # Prédiction
+        # 3. Prédiction
         df_input = pd.DataFrame([features])
         proba = model_ml.predict_proba(df_input)[0][1]
         return round(proba * 100, 1)
