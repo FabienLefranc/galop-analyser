@@ -683,7 +683,7 @@ if df is None or df.empty:
     st.stop()
 
 st.sidebar.header("🎯 Navigation")
-page = st.sidebar.radio("Choisir une vue :", ["📊 Tableau de bord", " Résumé du jour", "🏆 Analyse d'une course", "🐎 Statistiques chevaux", "🎯 Score prédictif", "🔍 Recherche cheval"])
+page = st.sidebar.radio("Choisir une vue :", ["📊 Tableau de bord", "📋 Résumé du jour", "🏆 Analyse d'une course", "🐎 Statistiques chevaux", "🎯 Score prédictif", " Recherche cheval"])
 
 if st.session_state.selected_date and st.sidebar.button("🗑️ Effacer la sélection"):
     st.session_state.selected_date = st.session_state.selected_reu = st.session_state.selected_course = None
