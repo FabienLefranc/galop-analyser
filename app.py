@@ -537,10 +537,45 @@ def calculer_score_ameliore(row, df_global, df_course):
     else:
         score += 4
 
-    # 10. GAINS (12 pts)
+    # ==========================================
+    # 10. GAINS (12 pts) - NOUVEAU : Efficacité et Potentiel
+    # ==========================================
     gains = float(row.get('Gains_Car', 0))
-    gains_max = df_course['Gains_Car'].max() if 'Gains_Car' in df_course.columns else 0
-    score += (min(100, (gains / gains_max) * 100) / 100) * 12 if gains > 0 and gains_max > 0 else 6
+    age = float(row.get('Âge', 5))
+    nb_courses = dict_chevaux.get(cheval_nom, {}).get('courses', 1)
+    if nb_courses == 0:
+        nb_courses = 1
+    
+    # 1. Calcul des gains par course (l'indicateur d'efficacité réelle)
+    gains_par_course = gains / nb_courses
+    
+    # 2. Calcul des gains par course moyens de la course pour une comparaison équitable
+    gains_par_course_race = []
+    for _, r in df_course.iterrows():
+        c_nom = nettoyer_nom(r.get('Cheval', ''))
+        c_courses = dict_chevaux.get(c_nom, {}).get('courses', 1)
+        if c_courses == 0: c_courses = 1
+        g = float(r.get('Gains_Car', 0))
+        gains_par_course_race.append(g / c_courses)
+    
+    moyenne_gains_pc_race = np.mean(gains_par_course_race) if gains_par_course_race else 1
+    max_gains_pc_race = np.max(gains_par_course_race) if gains_par_course_race else 1
+    
+    # 3. Score sur l'efficacité (Gains par course) par rapport au niveau de la course (6 pts)
+    ratio_efficacite = min(1.0, gains_par_course / max_gains_pc_race) if max_gains_pc_race > 0 else 0
+    score += ratio_efficacite * 6
+    
+    # 4. Score sur la régularité financière (4 pts)
+    # Un cheval qui a un bon ratio gains/course est un cheval qui place souvent
+    if gains_par_course >= moyenne_gains_pc_race:
+        score += 4
+    elif gains_par_course >= moyenne_gains_pc_race * 0.5:
+        score += 2
+        
+    # 5. Bonus "Jeune Progressiste" (2 pts)
+    # Un cheval de 3-4 ans avec des gains par course honorables est souvent en pleine progression
+    if age <= 4 and gains_par_course >= moyenne_gains_pc_race * 0.3:
+        score += 2
 
     # 11. COTE (12 pts pour compenser le retrait des points de forme basique)
     cote = float(row.get('Cote', 0.0))
