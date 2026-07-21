@@ -20,7 +20,7 @@ COLONNES_CSV = [
 ]
 
 # ==========================================
-# FONCTIONS UTILITAIRES (Définies en premier)
+# FONCTIONS UTILITAIRES
 # ==========================================
 def nettoyer_nom(nom):
     if pd.isna(nom): return ""
@@ -46,6 +46,68 @@ def calculer_progression(musique):
         score = max(-10, min(10, -tendance * 5))
         return round(score, 1)
     return 0
+
+def analyser_musique(musique):
+    """
+    Analyse complète de la musique et retourne 10 variables
+    Format typique : "6p5p2p7p5p0p0p(25)6p7p" ou "1p2a3d4p5t"
+    """
+    musique = str(musique).upper().strip()
+    
+    resultats = {
+        'Nb_victoires': 0,
+        'Nb_podiums': 0,
+        'Moyenne': 10.0,
+        'Dernier_classement': 10,
+        'Avant_dernier_classement': 10,
+        'Progression': 0.0,
+        'Regularite': 5.0,
+        'Abandons': 0,
+        'Disqualifications': 0,
+        'Courses_recentes': 0
+    }
+    
+    if not musique or musique == 'NAN':
+        return resultats
+    
+    # Extraire tous les éléments (chiffres et lettres)
+    elements = re.findall(r'(\d+|[ADTR])', musique)
+    
+    if not elements:
+        return resultats
+    
+    # Filtrer uniquement les classements numériques
+    classements = []
+    for elem in elements:
+        if elem.isdigit():
+            val = int(elem)
+            if 1 <= val <= 20:
+                classements.append(val)
+        elif elem == 'A':
+            resultats['Abandons'] += 1
+        elif elem == 'D':
+            resultats['Disqualifications'] += 1
+    
+    resultats['Courses_recentes'] = len(classements)
+    
+    if classements:
+        resultats['Nb_victoires'] = sum(1 for c in classements if c == 1)
+        resultats['Nb_podiums'] = sum(1 for c in classements if c <= 3)
+        resultats['Moyenne'] = round(np.mean(classements), 1)
+        resultats['Dernier_classement'] = classements[0]
+        
+        if len(classements) >= 2:
+            resultats['Avant_dernier_classement'] = classements[1]
+        
+        if len(classements) >= 3:
+            trois_derniers = classements[:3]
+            resultats['Progression'] = round((trois_derniers[0] - trois_derniers[-1]) / 3, 1)
+        
+        if len(classements) >= 2:
+            ecart_type = np.std(classements)
+            resultats['Regularite'] = round(max(0, 10 - ecart_type * 2), 1)
+    
+    return resultats
 
 # ==========================================
 # CHARGEMENT DES DONNÉES
@@ -81,22 +143,14 @@ def load_data():
         
         # 🛠️ CORRECTION AGRESSIVE DES COTES
         if 'Cote' in df.columns:
-            # Nettoyage et conversion robuste
             df['Cote'] = df['Cote'].astype(str).str.strip()
             df['Cote'] = df['Cote'].str.replace(',', '.', regex=False)
             df['Cote'] = df['Cote'].str.replace('"', '', regex=False)
             df['Cote'] = df['Cote'].str.replace("'", '', regex=False)
-            
-            # Conversion en float avec gestion des erreurs
             df['Cote'] = pd.to_numeric(df['Cote'], errors='coerce')
-            
-            # Correction des valeurs aberrantes (>100 = erreur de saisie)
             df.loc[df['Cote'] > 100, 'Cote'] = 10.0
-            
-            # Remplissage des NaN (cotes manquantes) par 10.0 (valeur moyenne réaliste)
             df['Cote'] = df['Cote'].fillna(10.0)
             
-            # Affichage stats
             cotes_valides = df[df['Cote'] > 0]['Cote']
             st.sidebar.success(f"✅ Cotes corrigées (Moy: {cotes_valides.mean():.2f}, Min: {cotes_valides.min():.1f}, Max: {cotes_valides.max():.1f})")
         
@@ -130,6 +184,7 @@ stats_entraineur = charger_stats('stats_entraineur.csv')
 stats_distance = charger_stats('stats_distance.csv')
 
 dict_chevaux, dict_jockey, dict_entraineur, dict_distance = {}, {}, {}, {}
+
 # ==========================================
 # CHARGEMENT DES NOUVELLES TABLES DE STATS
 # ==========================================
@@ -139,7 +194,6 @@ dict_corde = {}
 dict_surface = {}
 dict_poids = {}
 
-# Hippodrome
 try:
     df_hippo = pd.read_csv('stats_hippodrome.csv', sep=';', dtype={'Cheval_clean': str})
     for _, row in df_hippo.iterrows():
@@ -149,7 +203,6 @@ try:
     st.sidebar.success(f"✅ {len(dict_hippodrome)} couples cheval/hippodrome")
 except Exception: pass
 
-# Terrain
 try:
     df_terr = pd.read_csv('stats_terrain.csv', sep=';', dtype={'Cheval_clean': str})
     for _, row in df_terr.iterrows():
@@ -159,7 +212,6 @@ try:
     st.sidebar.success(f"✅ {len(dict_terrain)} couples cheval/terrain")
 except Exception: pass
 
-# Corde (Hippo + Distance + Corde)
 try:
     df_corde = pd.read_csv('stats_corde.csv', sep=';')
     for _, row in df_corde.iterrows():
@@ -169,7 +221,6 @@ try:
     st.sidebar.success(f"✅ {len(dict_corde)} combos hippo/dist/corde")
 except Exception: pass
 
-# Surface (GAZON / PSF)
 try:
     df_surf = pd.read_csv('stats_surface.csv', sep=';', dtype={'Cheval_clean': str})
     for _, row in df_surf.iterrows():
@@ -179,7 +230,6 @@ try:
     st.sidebar.success(f"✅ {len(dict_surface)} couples cheval/surface")
 except Exception: pass
 
-# Poids (par tranche de 2kg)
 try:
     df_poids = pd.read_csv('stats_poids.csv', sep=';', dtype={'Cheval_clean': str})
     for _, row in df_poids.iterrows():
@@ -223,12 +273,12 @@ st.sidebar.success(f"✅ {len(dict_jockey)} couples jockey")
 # Chargement du modèle Machine Learning
 model_ml = None
 try:
-    if os.path.exists('modele_galop.json'):
+    if os.path.exists('modele_galop_v3.json'):
         model_ml = xgb.XGBClassifier()
         model_ml.load_model('modele_galop_v3.json')
-        st.sidebar.success("✅ Modèle IA chargé avec succès")
+        st.sidebar.success("✅ Modèle IA V3 chargé avec succès")
     else:
-        st.sidebar.warning("⚠️ Fichier 'modele_galop.json' introuvable")
+        st.sidebar.warning("⚠️ Fichier 'modele_galop_v3.json' introuvable")
 except Exception as e:
     st.sidebar.warning(f"⚠️ Erreur chargement modèle IA: {e}")
 
@@ -247,7 +297,7 @@ def evaluer_confiance(proba):
         return "❌ À ÉVITER"
 
 def predire_proba_ml(row):
-    """Calcule la probabilité de victoire avec le modèle IA V3 (47 features)"""
+    """Calcule la probabilité de victoire avec le modèle IA V3 (46 features sans Cote)"""
     if model_ml is None: 
         return 0.0
     
@@ -263,7 +313,6 @@ def predire_proba_ml(row):
         poids_actuel = float(row.get('Poids', 0))
         sexe = str(row.get('Sexe', '')).strip().upper()
         
-        # 1. Calcul du Score de Forme (d'après la musique)
         musique = str(row.get('Musique', ''))
         chiffres = re.findall(r'\d+', musique)
         score_forme = 10
@@ -278,26 +327,21 @@ def predire_proba_ml(row):
                 else: scores.append(6)
             score_forme = np.mean(scores)
         
-        # 2. Musique détaillée
         musique_dernier = int(chiffres[-1]) if chiffres else 10
         musique_podiums = sum(1 for c in chiffres[:5] if int(c) <= 3)
         musique_victoires = sum(1 for c in chiffres[:5] if int(c) == 1)
         musique_moyenne = np.mean([int(c) for c in chiffres[:5]]) if chiffres else 10
         
-        # 3. Sexe
         sexe_male = 1 if sexe == 'M' else 0
         sexe_femelle = 1 if sexe == 'F' else 0
         
-        # 4. Terrain
         terrain_bon = 1 if 'BON' in terrain_actuel else 0
         terrain_souple = 1 if 'SOUPLE' in terrain_actuel else 0
         terrain_collant = 1 if 'COLLANT' in terrain_actuel else 0
         terrain_lourd = 1 if 'LOURD' in terrain_actuel else 0
         terrain_psf = 1 if 'PSF' in terrain_actuel or 'FIBRE' in terrain_actuel else 0
         
-        # 5. Construction des 47 features pour le modèle V3
         features = {
-            # Features de base
             'Poids': poids_actuel,
             'Poids_kg': poids_actuel / 10,
             'Corde': corde_actuelle,
@@ -306,14 +350,12 @@ def predire_proba_ml(row):
             'Sexe_Male': sexe_male,
             'Sexe_Femelle': sexe_femelle,
             
-            # Terrain
             'Terrain_Bon': terrain_bon,
             'Terrain_Souple': terrain_souple,
             'Terrain_Collant': terrain_collant,
             'Terrain_Lourd': terrain_lourd,
             'Terrain_PSF': terrain_psf,
             
-            # Stats Cheval
             'Courses_cheval': dict_chevaux.get(cheval_nom, {}).get('courses', 0),
             'Taux_victoire_cheval': dict_chevaux.get(cheval_nom, {}).get('taux_victoire', 0),
             'Taux_podium_cheval': dict_chevaux.get(cheval_nom, {}).get('taux_podium', 0),
@@ -327,44 +369,36 @@ def predire_proba_ml(row):
             'Hippo_favorite_match': dict_chevaux.get(cheval_nom, {}).get('hippo_favorite_match', 0),
             'Terrain_favorite_match': dict_chevaux.get(cheval_nom, {}).get('terrain_favorite_match', 0),
             
-            # Stats Jockey
             'Courses_jockey': dict_jockey.get((cheval_nom, jockey_actuel), {}).get('courses', 0),
             'Taux_victoire_jockey': dict_jockey.get((cheval_nom, jockey_actuel), {}).get('taux_victoire', 0),
             'Taux_podium_jockey': dict_jockey.get((cheval_nom, jockey_actuel), {}).get('taux_podium', 0),
             
-            # Stats Entraîneur
             'Courses_entraineur': dict_entraineur.get((cheval_nom, entraineur_actuel), {}).get('courses', 0),
             'Taux_victoire_entraineur': dict_entraineur.get((cheval_nom, entraineur_actuel), {}).get('taux_victoire', 0),
             'Taux_podium_entraineur': dict_entraineur.get((cheval_nom, entraineur_actuel), {}).get('taux_podium', 0),
             
-            # Stats Distance
             'Courses_distance': dict_distance.get((cheval_nom, dist_groupe), {}).get('courses', 0),
             'Taux_victoire_distance': dict_distance.get((cheval_nom, dist_groupe), {}).get('taux_victoire', 0),
             'Taux_podium_distance': dict_distance.get((cheval_nom, dist_groupe), {}).get('taux_podium', 0),
             
-            # Stats Hippodrome
             'Courses_hippo': dict_hippodrome.get((cheval_nom, hippo_actuel), {}).get('courses', 0),
             'Taux_victoire_hippo': dict_hippodrome.get((cheval_nom, hippo_actuel), {}).get('taux_victoire', 0),
             'Taux_podium_hippo': dict_hippodrome.get((cheval_nom, hippo_actuel), {}).get('taux_podium', 0),
             
-            # Stats Terrain
             'Courses_terrain': dict_terrain.get((cheval_nom, terrain_actuel), {}).get('courses', 0),
             'Taux_victoire_terrain': dict_terrain.get((cheval_nom, terrain_actuel), {}).get('taux_victoire', 0),
             'Taux_podium_terrain': dict_terrain.get((cheval_nom, terrain_actuel), {}).get('taux_podium', 0),
             
-            # Stats Corde
             'Courses_corde': dict_corde.get((cheval_nom, hippo_actuel, dist_groupe, corde_actuelle), {}).get('courses', 0),
             'Taux_victoire_corde': dict_corde.get((cheval_nom, hippo_actuel, dist_groupe, corde_actuelle), {}).get('taux_victoire', 0),
             'Taux_podium_corde': dict_corde.get((cheval_nom, hippo_actuel, dist_groupe, corde_actuelle), {}).get('taux_podium', 0),
             
-            # Musique détaillée
             'Musique_victoires': musique_victoires,
             'Musique_podiums': musique_podiums,
             'Musique_moyenne': musique_moyenne,
             'Musique_dernier': musique_dernier
         }
         
-        # 3. Prédiction
         df_input = pd.DataFrame([features])
         proba = model_ml.predict_proba(df_input)[0][1]
         return round(proba * 100, 1)
@@ -373,19 +407,11 @@ def predire_proba_ml(row):
         return 0.0
 
 def normaliser_probas_course(parts_df):
-    """
-    Normalise les Proba_IA brutes pour qu'elles somment à ~100% dans la course.
-    C'est la méthode la plus fiable pour obtenir des probabilités réalistes.
-    """
     total_probas = parts_df['Proba_IA'].sum()
     if total_probas == 0:
         return parts_df['Proba_IA']
     
-    # On normalise et on multiplie par 100 pour avoir un pourcentage
-    # On ajoute un petit bonus de base (5%) pour éviter les 0% absolus
     probas_norm = ((parts_df['Proba_IA'] / total_probas) * 100)
-    
-    # Lissage : on mélange 70% de la proba normalisée avec 30% de répartition égale
     nb_chevaux = len(parts_df)
     proba_equitable = 100 / nb_chevaux
     probas_lissees = (probas_norm * 0.7) + (proba_equitable * 0.3)
@@ -393,11 +419,8 @@ def normaliser_probas_course(parts_df):
     return probas_lissees.round(1)
 
 def calculer_score_combine(row):
-    """Combine Score Classique (60%) et Proba normalisée (40%)"""
     score_classique = float(row.get('Score', 0))
     proba_norm = float(row.get('Proba_Norm', 0))
-    
-    # Les deux sont déjà sur une échelle 0-100, on peut les combiner directement
     score_combine = (score_classique * 0.6) + (proba_norm * 0.4)
     return round(score_combine, 1)
 
@@ -412,29 +435,49 @@ def calculer_score_ameliore(row, df_global, df_course):
     poids_actuel = float(row.get('Poids', 0))
     poids_groupe = int((poids_actuel // 2) * 2)
     
-    # Déterminer la surface (GAZON ou PSF)
     surface_actuelle = 'PSF' if 'FIBRE' in terrain_actuel or 'PSF' in terrain_actuel else 'GAZON'
     
     jockey_actuel = nettoyer_nom(row.get('Jockey', ''))
     entraineur_actuel = nettoyer_nom(row.get('Entraîneur', ''))
     musique = str(row.get('Musique', ''))
     
-    # 1. FORME RÉCENTE (12 pts)
-    chiffres = re.findall(r'\d+', musique)
-    if chiffres:
-        scores_forme = [100 if int(c)==1 else 80 if int(c)==2 else 65 if int(c)==3 else 50 if int(c)==4 else 30 for c in chiffres[:5]]
-        score += (np.mean(scores_forme) / 100) * 12
-    else:
-        score += 6 
-
-    # 2. RÉGULARITÉ (4 pts)
-    score += (calculer_regularite(musique) / 10) * 4
-
-    # 3. PROGRESSION (4 pts)
-    progression = calculer_progression(musique)
-    score += (max(0, min(10, progression + 10)) / 10) * 4
-
-    # 4. JOCKEY (10 pts)
+    # ==========================================
+    # ANALYSE COMPLÈTE DE LA MUSIQUE (10 variables)
+    # ==========================================
+    stats_musique = analyser_musique(musique)
+    
+    # 1.1 Victoires récentes (5 pts)
+    score += min(5, stats_musique['Nb_victoires'] * 1.5)
+    
+    # 1.2 Podiums récents (4 pts)
+    score += min(4, stats_musique['Nb_podiums'] * 0.8)
+    
+    # 1.3 Moyenne de classement (3 pts)
+    if stats_musique['Moyenne'] <= 3:
+        score += 3
+    elif stats_musique['Moyenne'] <= 5:
+        score += 2
+    elif stats_musique['Moyenne'] <= 8:
+        score += 1
+    
+    # 1.4 Dernier classement (2 pts)
+    if stats_musique['Dernier_classement'] <= 2:
+        score += 2
+    elif stats_musique['Dernier_classement'] <= 5:
+        score += 1
+    
+    # 1.5 Progression (1 pt)
+    if stats_musique['Progression'] > 0:
+        score += 1
+    
+    # 1.6 Pénalité abandons/disqualifications (-2 pts max)
+    incidents = stats_musique['Abandons'] + stats_musique['Disqualifications']
+    score -= min(2, incidents * 0.5)
+    
+    # 2. RÉGULARITÉ (5 pts)
+    score += (stats_musique['Regularite'] / 10) * 5
+    
+    # 3. JOCKEY (10 pts)
     stats = dict_jockey.get((cheval_nom, jockey_actuel), {})
     if stats.get('courses', 0) >= 3:
         s = (stats['taux_podium'] * 0.6 + stats['taux_victoire'] * 0.4) / 100 * 10
@@ -442,7 +485,7 @@ def calculer_score_ameliore(row, df_global, df_course):
     else:
         score += 3
 
-    # 5. ENTRAÎNEUR (10 pts)
+    # 4. ENTRAÎNEUR (10 pts)
     stats = dict_entraineur.get((cheval_nom, entraineur_actuel), {})
     if stats.get('courses', 0) >= 3:
         s = (stats['taux_podium'] * 0.6 + stats['taux_victoire'] * 0.4) / 100 * 10
@@ -450,7 +493,7 @@ def calculer_score_ameliore(row, df_global, df_course):
     else:
         score += 3
 
-    # 6. DISTANCE (8 pts)
+    # 5. DISTANCE (8 pts)
     meilleure_stats = None
     for dist_test in [dist_groupe - 200, dist_groupe, dist_groupe + 200]:
         stats = dict_distance.get((cheval_nom, dist_test))
@@ -462,7 +505,7 @@ def calculer_score_ameliore(row, df_global, df_course):
     else:
         score += 4
 
-    # 7. HIPPODROME (8 pts) - NOUVEAU
+    # 6. HIPPODROME (8 pts)
     stats = dict_hippodrome.get((cheval_nom, hippo_actuel), {})
     if stats.get('courses', 0) >= 2:
         s = (stats['taux_podium'] * 0.6 + stats['taux_victoire'] * 0.4) / 100 * 8
@@ -470,7 +513,7 @@ def calculer_score_ameliore(row, df_global, df_course):
     else:
         score += 4
 
-    # 8. SURFACE (6 pts) - NOUVEAU
+    # 7. SURFACE (6 pts)
     stats = dict_surface.get((cheval_nom, surface_actuelle), {})
     if stats.get('courses', 0) >= 2:
         s = (stats['taux_podium'] * 0.6 + stats['taux_victoire'] * 0.4) / 100 * 6
@@ -478,7 +521,7 @@ def calculer_score_ameliore(row, df_global, df_course):
     else:
         score += 3
 
-    # 9. CORDE (8 pts) - NOUVEAU (basé sur Hippo + Distance + Corde)
+    # 8. CORDE (8 pts)
     stats = dict_corde.get((hippo_actuel, dist_groupe, int(corde_actuelle)), {})
     if stats.get('courses', 0) >= 5:
         s = (stats['taux_podium'] * 0.6 + stats['taux_victoire'] * 0.4) / 100 * 8
@@ -486,7 +529,7 @@ def calculer_score_ameliore(row, df_global, df_course):
     else:
         score += 4
 
-    # 10. POIDS (8 pts) - NOUVEAU (basé sur tranche de poids)
+    # 9. POIDS (8 pts)
     stats = dict_poids.get((cheval_nom, poids_groupe), {})
     if stats.get('courses', 0) >= 2:
         s = (stats['taux_podium'] * 0.6 + stats['taux_victoire'] * 0.4) / 100 * 8
@@ -494,18 +537,18 @@ def calculer_score_ameliore(row, df_global, df_course):
     else:
         score += 4
 
-    # 11. GAINS (12 pts)
+    # 10. GAINS (12 pts)
     gains = float(row.get('Gains_Car', 0))
     gains_max = df_course['Gains_Car'].max() if 'Gains_Car' in df_course.columns else 0
     score += (min(100, (gains / gains_max) * 100) / 100) * 12 if gains > 0 and gains_max > 0 else 6
 
-    # 12. COTE (10 pts)
+    # 11. COTE (12 pts pour compenser le retrait des points de forme basique)
     cote = float(row.get('Cote', 0.0))
     if cote > 0:
         score_cote = 100 if cote <= 3 else (80 if cote <= 6 else (60 if cote <= 10 else (40 if cote <= 20 else 20)))
-        score += (score_cote / 100) * 10
+        score += (score_cote / 100) * 12
     else:
-        score += 5
+        score += 6
     
     return round(min(100, max(0, score)), 1)
 
@@ -640,7 +683,7 @@ elif page == "📋 Résumé du jour":
             )
             
             st.markdown("---")
-            st.subheader(" Détail par hippodrome")
+            st.subheader("📊 Détail par hippodrome")
             
             for hippo_name in recap_df["Hippodrome"].unique():
                 courses_hippo = recap_df[recap_df["Hippodrome"] == hippo_name]
@@ -650,31 +693,28 @@ elif page == "📋 Résumé du jour":
                         distance_affichee = course_data.iloc[0]['Distance']
                         st.markdown(f"**{distance_affichee}** - {course_num}")
                         
-                        # === TOP 3 SCORE CLASSIQUE ===
                         st.markdown("#### 📊 Top 3 Score Classique")
                         col1, col2, col3 = st.columns(3)
                         data_score = course_data[course_data["Type"] == "Score"].sort_values("Rang")
                         for i, (_, row) in enumerate(data_score.head(3).iterrows()):
                             with [col1, col2, col3][i]:
-                                medal = ["🥇", "", "🥉"][i]
+                                medal = ["🥇", "🥈", "🥉"][i]
                                 st.metric(f"{medal} N°{int(row['Num'])} {row['Cheval']}", f"Score: {row['Score']}")
                         
-                        # === TOP 3 IA ===
                         st.markdown("#### 🤖 Top 3 IA")
                         col1, col2, col3 = st.columns(3)
                         data_ia = course_data[course_data["Type"] == "IA"].sort_values("Rang")
                         for i, (_, row) in enumerate(data_ia.head(3).iterrows()):
                             with [col1, col2, col3][i]:
-                                medal = ["", "🥈", "🥉"][i]
+                                medal = ["🥇", "🥈", "🥉"][i]
                                 st.metric(f"{medal} N°{int(row['Num'])} {row['Cheval']}", f"Proba: {row['Proba_Norm']:.1f}%")
                         
-                        # === TOP 3 COMBINÉ ===
                         st.markdown("#### 🎯 Top 3 Score Combiné")
                         col1, col2, col3 = st.columns(3)
                         data_combine = course_data[course_data["Type"] == "Combine"].sort_values("Rang")
                         for i, (_, row) in enumerate(data_combine.head(3).iterrows()):
                             with [col1, col2, col3][i]:
-                                medal = ["🥇", "🥈", ""][i]
+                                medal = ["🥇", "🥈", "🥉"][i]
                                 st.metric(f"{medal} N°{int(row['Num'])} {row['Cheval']}", f"Combine: {row['Score_Combine']}")
                         
                         st.markdown("---")
@@ -683,19 +723,17 @@ elif page == "🏆 Analyse d'une course":
     st.header("🏆 Analyse détaillée d'une course")
     dates_valides = sorted([d for d in df["Date"].unique() if isinstance(d, str) and len(d) == 8], reverse=True)
     
-    # Date du jour au format JJMMYYYY (ex: 21072026 pour le 21/07/2026)
     date_aujourdhui = datetime.now().strftime("%d%m%Y")
     
-    # Si la date du jour existe dans la base, on la sélectionne par défaut
     if date_aujourdhui in dates_valides:
         index_defaut = dates_valides.index(date_aujourdhui)
     else:
         index_defaut = 0
     
-    date_sel = st.selectbox(" Date :", dates_valides, index=index_defaut)
+    date_sel = st.selectbox("📅 Date :", dates_valides, index=index_defaut)
     courses_df = df[df["Date"] == date_sel].groupby(["Réu", "Course", "Hippo", "Dist"]).size().reset_index(name='count')
     courses_df["label"] = courses_df.apply(lambda x: f"{x['Hippo']} - R{x['Réu']}C{x['Course']} ({x['Dist']}m)", axis=1)
-    course_label = st.selectbox(" Course :", courses_df["label"])
+    course_label = st.selectbox("🏇 Course :", courses_df["label"])
     
     if course_label:
         info = courses_df[courses_df["label"] == course_label].iloc[0]
@@ -728,15 +766,12 @@ elif page == "🎯 Score prédictif":
         if not parts.empty:
             st.success(f"✅ Course du **{st.session_state.selected_date}**")
             
-            # Calcul des scores
             parts["Score"] = parts.apply(lambda row: calculer_score_ameliore(row, df, parts), axis=1)
             parts["Proba_IA"] = parts.apply(lambda row: predire_proba_ml(row), axis=1)
             parts["Proba_Norm"] = normaliser_probas_course(parts)
             
-            # NOUVEAU : Ajout du niveau de confiance
             parts["Confiance"] = parts["Proba_Norm"].apply(evaluer_confiance)
             
-            # Score combiné et classement
             parts["Score_Combine"] = parts.apply(calculer_score_combine, axis=1)
             parts = parts.sort_values("Score_Combine", ascending=False)
             parts["Rang"] = range(1, len(parts)+1)
