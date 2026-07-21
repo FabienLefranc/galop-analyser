@@ -287,7 +287,6 @@ def predire_proba_ml(row):
         # 5. Construction des 47 features pour le modèle V3
         features = {
             # Features de base
-            'Cote': float(row.get('Cote', 10)),
             'Poids': poids_actuel,
             'Poids_kg': poids_actuel / 10,
             'Corde': corde_actuelle,
