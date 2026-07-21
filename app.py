@@ -225,7 +225,7 @@ model_ml = None
 try:
     if os.path.exists('modele_galop.json'):
         model_ml = xgb.XGBClassifier()
-        model_ml.load_model('modele_galop_v2.json')
+        model_ml.load_model('modele_galop_v3.json')
         st.sidebar.success("✅ Modèle IA chargé avec succès")
     else:
         st.sidebar.warning("⚠️ Fichier 'modele_galop.json' introuvable")
@@ -236,7 +236,7 @@ except Exception as e:
 # FONCTIONS DE CALCUL DE SCORE
 # ==========================================
 def predire_proba_ml(row):
-    """Calcule la probabilité de victoire avec le modèle IA V2 (21 features)"""
+    """Calcule la probabilité de victoire avec le modèle IA V3 (47 features)"""
     if model_ml is None: 
         return 0.0
     
@@ -245,8 +245,12 @@ def predire_proba_ml(row):
         jockey_actuel = nettoyer_nom(row.get('Jockey', ''))
         entraineur_actuel = nettoyer_nom(row.get('Entraîneur', ''))
         hippo_actuel = str(row.get('Hippo', '')).strip()
+        terrain_actuel = str(row.get('Terrain', '')).strip().upper()
         dist_actuelle = float(row.get('Dist', 0))
         dist_groupe = int((dist_actuelle // 200) * 200)
+        corde_actuelle = float(row.get('Corde', 0))
+        poids_actuel = float(row.get('Poids', 0))
+        sexe = str(row.get('Sexe', '')).strip().upper()
         
         # 1. Calcul du Score de Forme (d'après la musique)
         musique = str(row.get('Musique', ''))
@@ -262,20 +266,56 @@ def predire_proba_ml(row):
                 elif val == 4: scores.append(10)
                 else: scores.append(6)
             score_forme = np.mean(scores)
-
-        # 2. Construction des 21 features pour le modèle V2
+        
+        # 2. Musique détaillée
+        musique_dernier = int(chiffres[-1]) if chiffres else 10
+        musique_podiums = sum(1 for c in chiffres[:5] if int(c) <= 3)
+        musique_victoires = sum(1 for c in chiffres[:5] if int(c) == 1)
+        musique_moyenne = np.mean([int(c) for c in chiffres[:5]]) if chiffres else 10
+        
+        # 3. Sexe
+        sexe_male = 1 if sexe == 'M' else 0
+        sexe_femelle = 1 if sexe == 'F' else 0
+        
+        # 4. Terrain
+        terrain_bon = 1 if 'BON' in terrain_actuel else 0
+        terrain_souple = 1 if 'SOUPLE' in terrain_actuel else 0
+        terrain_collant = 1 if 'COLLANT' in terrain_actuel else 0
+        terrain_lourd = 1 if 'LOURD' in terrain_actuel else 0
+        terrain_psf = 1 if 'PSF' in terrain_actuel or 'FIBRE' in terrain_actuel else 0
+        
+        # 5. Construction des 47 features pour le modèle V3
         features = {
+            # Features de base
             'Cote': float(row.get('Cote', 10)),
-            'Poids_kg': float(row.get('Poids', 0)) / 10,
-            'Corde': float(row.get('Corde', 0)),
+            'Poids': poids_actuel,
+            'Poids_kg': poids_actuel / 10,
+            'Corde': corde_actuelle,
             'Nb_Partants': float(row.get('Nb_Partants', 16)),
-            'Âge': float(row.get('Âge', 0)),
-            'Score_Forme': score_forme,
+            'Age': float(row.get('Âge', 0)),
+            'Sexe_Male': sexe_male,
+            'Sexe_Femelle': sexe_femelle,
+            
+            # Terrain
+            'Terrain_Bon': terrain_bon,
+            'Terrain_Souple': terrain_souple,
+            'Terrain_Collant': terrain_collant,
+            'Terrain_Lourd': terrain_lourd,
+            'Terrain_PSF': terrain_psf,
             
             # Stats Cheval
             'Courses_cheval': dict_chevaux.get(cheval_nom, {}).get('courses', 0),
             'Taux_victoire_cheval': dict_chevaux.get(cheval_nom, {}).get('taux_victoire', 0),
             'Taux_podium_cheval': dict_chevaux.get(cheval_nom, {}).get('taux_podium', 0),
+            'Moyenne_classement': dict_chevaux.get(cheval_nom, {}).get('moyenne_classement', 0),
+            'Jours_depuis_derniere': dict_chevaux.get(cheval_nom, {}).get('jours_depuis_derniere', 0),
+            'Progression': dict_chevaux.get(cheval_nom, {}).get('progression', 0),
+            'Regularite': dict_chevaux.get(cheval_nom, {}).get('regularite', 0),
+            'Gains_per_course': dict_chevaux.get(cheval_nom, {}).get('gains_per_course', 0),
+            'Poids_ecart': dict_chevaux.get(cheval_nom, {}).get('poids_ecart', 0),
+            'Distance_favorite_match': dict_chevaux.get(cheval_nom, {}).get('distance_favorite_match', 0),
+            'Hippo_favorite_match': dict_chevaux.get(cheval_nom, {}).get('hippo_favorite_match', 0),
+            'Terrain_favorite_match': dict_chevaux.get(cheval_nom, {}).get('terrain_favorite_match', 0),
             
             # Stats Jockey
             'Courses_jockey': dict_jockey.get((cheval_nom, jockey_actuel), {}).get('courses', 0),
@@ -295,9 +335,25 @@ def predire_proba_ml(row):
             # Stats Hippodrome
             'Courses_hippo': dict_hippodrome.get((cheval_nom, hippo_actuel), {}).get('courses', 0),
             'Taux_victoire_hippo': dict_hippodrome.get((cheval_nom, hippo_actuel), {}).get('taux_victoire', 0),
-            'Taux_podium_hippo': dict_hippodrome.get((cheval_nom, hippo_actuel), {}).get('taux_podium', 0)
+            'Taux_podium_hippo': dict_hippodrome.get((cheval_nom, hippo_actuel), {}).get('taux_podium', 0),
+            
+            # Stats Terrain
+            'Courses_terrain': dict_terrain.get((cheval_nom, terrain_actuel), {}).get('courses', 0),
+            'Taux_victoire_terrain': dict_terrain.get((cheval_nom, terrain_actuel), {}).get('taux_victoire', 0),
+            'Taux_podium_terrain': dict_terrain.get((cheval_nom, terrain_actuel), {}).get('taux_podium', 0),
+            
+            # Stats Corde
+            'Courses_corde': dict_corde.get((cheval_nom, hippo_actuel, dist_groupe, corde_actuelle), {}).get('courses', 0),
+            'Taux_victoire_corde': dict_corde.get((cheval_nom, hippo_actuel, dist_groupe, corde_actuelle), {}).get('taux_victoire', 0),
+            'Taux_podium_corde': dict_corde.get((cheval_nom, hippo_actuel, dist_groupe, corde_actuelle), {}).get('taux_podium', 0),
+            
+            # Musique détaillée
+            'Musique_victoires': musique_victoires,
+            'Musique_podiums': musique_podiums,
+            'Musique_moyenne': musique_moyenne,
+            'Musique_dernier': musique_dernier
         }
-
+        
         # 3. Prédiction
         df_input = pd.DataFrame([features])
         proba = model_ml.predict_proba(df_input)[0][1]
