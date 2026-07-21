@@ -235,6 +235,17 @@ except Exception as e:
 # ==========================================
 # FONCTIONS DE CALCUL DE SCORE
 # ==========================================
+def evaluer_confiance(proba):
+    """Traduit la probabilité en niveau de confiance actionnable"""
+    if proba >= 15.0:
+        return "🔥 FORTE (Favori du modèle)"
+    elif proba >= 10.0:
+        return "✅ MOYENNE (Bon outsider)"
+    elif proba >= 7.0:
+        return "⚠️ FAIBLE (Coup de poker)"
+    else:
+        return "❌ À ÉVITER"
+
 def predire_proba_ml(row):
     """Calcule la probabilité de victoire avec le modèle IA V3 (47 features)"""
     if model_ml is None: 
@@ -721,6 +732,16 @@ elif page == "🎯 Score prédictif":
             parts["Score"] = parts.apply(lambda row: calculer_score_ameliore(row, df, parts), axis=1)
             parts["Proba_IA"] = parts.apply(lambda row: predire_proba_ml(row), axis=1)
             parts["Proba_Norm"] = normaliser_probas_course(parts)
+	    parts["Score"] = parts.apply(lambda row: calculer_score_ameliore(row, df, parts), axis=1)
+            parts["Proba_IA"] = parts.apply(lambda row: predire_proba_ml(row), axis=1)
+            parts["Proba_Norm"] = normaliser_probas_course(parts)
+            
+            # NOUVEAU : Ajout du niveau de confiance
+            parts["Confiance"] = parts["Proba_Norm"].apply(evaluer_confiance)
+            
+            parts["Score_Combine"] = parts.apply(calculer_score_combine, axis=1)
+            parts = parts.sort_values("Score_Combine", ascending=False)
+            parts["Rang"] = range(1, len(parts)+1)
             
             # Score combiné et classement
             parts["Score_Combine"] = parts.apply(calculer_score_combine, axis=1)
@@ -728,7 +749,7 @@ elif page == "🎯 Score prédictif":
             parts["Rang"] = range(1, len(parts)+1)
             
             st.subheader("🏆 Classement")
-            st.dataframe(parts[["Rang", "Num_PMU", "Cheval", "Score_Combine", "Score", "Proba_Norm", "Cote", "Musique"]], use_container_width=True)
+            st.dataframe(parts[["Rang", "Num_PMU", "Cheval", "Score_Combine", "Confiance", "Proba_Norm", "Musique"]], use_container_width=True)
             
             fig = px.bar(parts, x="Cheval", y="Score", color="Score", color_continuous_scale="Viridis")
             st.plotly_chart(fig, use_container_width=True)
