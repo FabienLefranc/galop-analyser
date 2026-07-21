@@ -529,13 +529,34 @@ def calculer_score_ameliore(row, df_global, df_course):
     else:
         score += 4
 
-    # 9. POIDS (8 pts)
-    stats = dict_poids.get((cheval_nom, poids_groupe), {})
-    if stats.get('courses', 0) >= 2:
-        s = (stats['taux_podium'] * 0.6 + stats['taux_victoire'] * 0.4) / 100 * 8
-        score += s * min(1.0, stats['courses'] / 5)
+    # ==========================================
+    # 9. POIDS (8 pts) - NOUVEAU : Comparaison avec le poids habituel
+    # ==========================================
+    poids_actuel = float(row.get('Poids', 0))
+    
+    # Calcul du poids habituel du cheval à partir de son historique global
+    historique_cheval = df_global[df_global['Cheval_clean'] == cheval_nom]
+    
+    if not historique_cheval.empty:
+        poids_habituel = historique_cheval['Poids'].mean()
     else:
-        score += 4
+        poids_habituel = poids_actuel  # Pas d'historique, on considère l'écart comme nul
+    
+    ecart_poids = poids_actuel - poids_habituel
+    
+    # Attribution des points en fonction de la surcharge
+    if pd.isna(poids_habituel) or ecart_poids <= 0:
+        # Le cheval porte moins ou autant que d'habitude : condition idéale
+        score += 8
+    elif ecart_poids <= 2.0:
+        # Écart mineur (fluctuation normale de 1 à 2 kg)
+        score += 6
+    elif ecart_poids <= 4.0:
+        # Écart notable (le cheval commence à être chargé)
+        score += 3
+    else:
+        # Surcharge importante (+ de 4 kg) : forte pénalité
+        score += 0
 
     # ==========================================
     # 10. GAINS (12 pts) - NOUVEAU : Efficacité et Potentiel
