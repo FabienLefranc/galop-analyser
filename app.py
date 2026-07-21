@@ -717,9 +717,9 @@ elif page == "🐎 Statistiques chevaux":
                 st.dataframe(historique[["Date", "Hippo", "Dist", "Classement", "Cote"]], use_container_width=True)
 
 elif page == "🎯 Score prédictif":
-    st.header(" Score prédictif")
+    st.header("🎯 Score prédictif")
     if st.session_state.selected_date is None:
-        st.warning("️ Va d'abord dans **🏆 Analyse d'une course** !")
+        st.warning("⚠️ Va d'abord dans **🏆 Analyse d'une course** !")
     else:
         parts = df[(df["Date"] == str(st.session_state.selected_date)) & 
                    (df["Réu"] == int(st.session_state.selected_reu)) & 
@@ -732,16 +732,9 @@ elif page == "🎯 Score prédictif":
             parts["Score"] = parts.apply(lambda row: calculer_score_ameliore(row, df, parts), axis=1)
             parts["Proba_IA"] = parts.apply(lambda row: predire_proba_ml(row), axis=1)
             parts["Proba_Norm"] = normaliser_probas_course(parts)
-	    parts["Score"] = parts.apply(lambda row: calculer_score_ameliore(row, df, parts), axis=1)
-            parts["Proba_IA"] = parts.apply(lambda row: predire_proba_ml(row), axis=1)
-            parts["Proba_Norm"] = normaliser_probas_course(parts)
             
             # NOUVEAU : Ajout du niveau de confiance
             parts["Confiance"] = parts["Proba_Norm"].apply(evaluer_confiance)
-            
-            parts["Score_Combine"] = parts.apply(calculer_score_combine, axis=1)
-            parts = parts.sort_values("Score_Combine", ascending=False)
-            parts["Rang"] = range(1, len(parts)+1)
             
             # Score combiné et classement
             parts["Score_Combine"] = parts.apply(calculer_score_combine, axis=1)
