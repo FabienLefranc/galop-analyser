@@ -130,6 +130,64 @@ stats_entraineur = charger_stats('stats_entraineur.csv')
 stats_distance = charger_stats('stats_distance.csv')
 
 dict_chevaux, dict_jockey, dict_entraineur, dict_distance = {}, {}, {}, {}
+# ==========================================
+# CHARGEMENT DES NOUVELLES TABLES DE STATS
+# ==========================================
+dict_hippodrome = {}
+dict_terrain = {}
+dict_corde = {}
+dict_surface = {}
+dict_poids = {}
+
+# Hippodrome
+try:
+    df_hippo = pd.read_csv('stats_hippodrome.csv', sep=';', dtype={'Cheval_clean': str})
+    for _, row in df_hippo.iterrows():
+        dict_hippodrome[(row['Cheval_clean'], str(row['Hippo']))] = {
+            'courses': int(row['Courses']), 'taux_victoire': float(row['Taux_victoire']), 'taux_podium': float(row['Taux_podium'])
+        }
+    st.sidebar.success(f"✅ {len(dict_hippodrome)} couples cheval/hippodrome")
+except Exception: pass
+
+# Terrain
+try:
+    df_terr = pd.read_csv('stats_terrain.csv', sep=';', dtype={'Cheval_clean': str})
+    for _, row in df_terr.iterrows():
+        dict_terrain[(row['Cheval_clean'], str(row['Terrain']))] = {
+            'courses': int(row['Courses']), 'taux_victoire': float(row['Taux_victoire']), 'taux_podium': float(row['Taux_podium'])
+        }
+    st.sidebar.success(f"✅ {len(dict_terrain)} couples cheval/terrain")
+except Exception: pass
+
+# Corde (Hippo + Distance + Corde)
+try:
+    df_corde = pd.read_csv('stats_corde.csv', sep=';')
+    for _, row in df_corde.iterrows():
+        dict_corde[(str(row['Hippo']), int(row['Dist_groupe']), int(row['Corde']))] = {
+            'courses': int(row['Courses']), 'taux_victoire': float(row['Taux_victoire']), 'taux_podium': float(row['Taux_podium'])
+        }
+    st.sidebar.success(f"✅ {len(dict_corde)} combos hippo/dist/corde")
+except Exception: pass
+
+# Surface (GAZON / PSF)
+try:
+    df_surf = pd.read_csv('stats_surface.csv', sep=';', dtype={'Cheval_clean': str})
+    for _, row in df_surf.iterrows():
+        dict_surface[(row['Cheval_clean'], str(row['Surface']))] = {
+            'courses': int(row['Courses']), 'taux_victoire': float(row['Taux_victoire']), 'taux_podium': float(row['Taux_podium'])
+        }
+    st.sidebar.success(f"✅ {len(dict_surface)} couples cheval/surface")
+except Exception: pass
+
+# Poids (par tranche de 2kg)
+try:
+    df_poids = pd.read_csv('stats_poids.csv', sep=';', dtype={'Cheval_clean': str})
+    for _, row in df_poids.iterrows():
+        dict_poids[(row['Cheval_clean'], int(row['Poids_groupe']))] = {
+            'courses': int(row['Courses']), 'taux_victoire': float(row['Taux_victoire']), 'taux_podium': float(row['Taux_podium'])
+        }
+    st.sidebar.success(f"✅ {len(dict_poids)} couples cheval/poids")
+except Exception: pass
 
 if not stats_chevaux.empty:
     for _, row in stats_chevaux.iterrows():
@@ -264,78 +322,108 @@ def calculer_score_combine(row):
 def calculer_score_ameliore(row, df_global, df_course):
     score = 0
     cheval_nom = nettoyer_nom(row.get('Cheval', ''))
+    hippo_actuel = str(row.get('Hippo', '')).strip()
+    terrain_actuel = str(row.get('Terrain', '')).strip().upper()
     dist_actuelle = float(row.get('Dist', 0))
+    dist_groupe = int((dist_actuelle // 200) * 200)
+    corde_actuelle = float(row.get('Corde', 0))
+    poids_actuel = float(row.get('Poids', 0))
+    poids_groupe = int((poids_actuel // 2) * 2)
+    
+    # Déterminer la surface (GAZON ou PSF)
+    surface_actuelle = 'PSF' if 'FIBRE' in terrain_actuel or 'PSF' in terrain_actuel else 'GAZON'
+    
     jockey_actuel = nettoyer_nom(row.get('Jockey', ''))
     entraineur_actuel = nettoyer_nom(row.get('Entraîneur', ''))
     musique = str(row.get('Musique', ''))
     
-    # 1. FORME (15 pts)
+    # 1. FORME RÉCENTE (12 pts)
     chiffres = re.findall(r'\d+', musique)
     if chiffres:
         scores_forme = [100 if int(c)==1 else 80 if int(c)==2 else 65 if int(c)==3 else 50 if int(c)==4 else 30 for c in chiffres[:5]]
-        score += (np.mean(scores_forme) / 100) * 15
+        score += (np.mean(scores_forme) / 100) * 12
     else:
-        score += 7.5 
+        score += 6 
 
-    # 2. RÉGULARITÉ (5 pts)
-    score += (calculer_regularite(musique) / 10) * 5
+    # 2. RÉGULARITÉ (4 pts)
+    score += (calculer_regularite(musique) / 10) * 4
 
-    # 3. PROGRESSION (5 pts)
+    # 3. PROGRESSION (4 pts)
     progression = calculer_progression(musique)
-    score += (max(0, min(10, progression + 10)) / 10) * 5
+    score += (max(0, min(10, progression + 10)) / 10) * 4
 
-    # 4. JOCKEY / ENTRAÎNEUR (25 pts)
-    for key_dict, acteur_actuel in [(dict_jockey, jockey_actuel), (dict_entraineur, entraineur_actuel)]:
-        if acteur_actuel != "" and cheval_nom != "":
-            stats = key_dict.get((cheval_nom, acteur_actuel), {})
-            if stats.get('courses', 0) >= 3:
-                s = (stats['taux_podium'] * 0.6 + stats['taux_victoire'] * 0.4) / 100 * 12.5
-                score += s * min(1.0, stats['courses'] / 10)
-            else:
-                score += 3
+    # 4. JOCKEY (10 pts)
+    stats = dict_jockey.get((cheval_nom, jockey_actuel), {})
+    if stats.get('courses', 0) >= 3:
+        s = (stats['taux_podium'] * 0.6 + stats['taux_victoire'] * 0.4) / 100 * 10
+        score += s * min(1.0, stats['courses'] / 10)
+    else:
+        score += 3
 
-    # 5. DISTANCE (15 pts)
-    dist_groupe = int((dist_actuelle // 200) * 200)
+    # 5. ENTRAÎNEUR (10 pts)
+    stats = dict_entraineur.get((cheval_nom, entraineur_actuel), {})
+    if stats.get('courses', 0) >= 3:
+        s = (stats['taux_podium'] * 0.6 + stats['taux_victoire'] * 0.4) / 100 * 10
+        score += s * min(1.0, stats['courses'] / 10)
+    else:
+        score += 3
+
+    # 6. DISTANCE (8 pts)
     meilleure_stats = None
     for dist_test in [dist_groupe - 200, dist_groupe, dist_groupe + 200]:
         stats = dict_distance.get((cheval_nom, dist_test))
         if stats and (meilleure_stats is None or stats['courses'] > meilleure_stats['courses']):
             meilleure_stats = stats
-    
     if meilleure_stats and meilleure_stats['courses'] >= 2:
-        s = (meilleure_stats['taux_podium'] * 0.6 + meilleure_stats['taux_victoire'] * 0.4) / 100 * 15
+        s = (meilleure_stats['taux_podium'] * 0.6 + meilleure_stats['taux_victoire'] * 0.4) / 100 * 8
         score += s * min(1.0, meilleure_stats['courses'] / 8)
     else:
-        score += 5
+        score += 4
 
-    # 6. GAINS (15 pts)
+    # 7. HIPPODROME (8 pts) - NOUVEAU
+    stats = dict_hippodrome.get((cheval_nom, hippo_actuel), {})
+    if stats.get('courses', 0) >= 2:
+        s = (stats['taux_podium'] * 0.6 + stats['taux_victoire'] * 0.4) / 100 * 8
+        score += s * min(1.0, stats['courses'] / 5)
+    else:
+        score += 4
+
+    # 8. SURFACE (6 pts) - NOUVEAU
+    stats = dict_surface.get((cheval_nom, surface_actuelle), {})
+    if stats.get('courses', 0) >= 2:
+        s = (stats['taux_podium'] * 0.6 + stats['taux_victoire'] * 0.4) / 100 * 6
+        score += s * min(1.0, stats['courses'] / 5)
+    else:
+        score += 3
+
+    # 9. CORDE (8 pts) - NOUVEAU (basé sur Hippo + Distance + Corde)
+    stats = dict_corde.get((hippo_actuel, dist_groupe, int(corde_actuelle)), {})
+    if stats.get('courses', 0) >= 5:
+        s = (stats['taux_podium'] * 0.6 + stats['taux_victoire'] * 0.4) / 100 * 8
+        score += s * min(1.0, stats['courses'] / 10)
+    else:
+        score += 4
+
+    # 10. POIDS (8 pts) - NOUVEAU (basé sur tranche de poids)
+    stats = dict_poids.get((cheval_nom, poids_groupe), {})
+    if stats.get('courses', 0) >= 2:
+        s = (stats['taux_podium'] * 0.6 + stats['taux_victoire'] * 0.4) / 100 * 8
+        score += s * min(1.0, stats['courses'] / 5)
+    else:
+        score += 4
+
+    # 11. GAINS (12 pts)
     gains = float(row.get('Gains_Car', 0))
     gains_max = df_course['Gains_Car'].max() if 'Gains_Car' in df_course.columns else 0
-    score += (min(100, (gains / gains_max) * 100) / 100) * 15 if gains > 0 and gains_max > 0 else 7.5
+    score += (min(100, (gains / gains_max) * 100) / 100) * 12 if gains > 0 and gains_max > 0 else 6
 
-    # 7. POIDS (10 pts)
-    poids = float(row.get('Poids', 0))
-    poids_moyen = df_course['Poids'].mean() if 'Poids' in df_course.columns else 0
-    if poids > 0 and poids_moyen > 0:
-        score += (max(0, min(100, 50 + ((poids_moyen - poids) * 5))) / 100) * 10
-    else:
-        score += 5
-
-    # 8. CORDE (10 pts)
-    corde = float(row.get('Corde', 0))
-    nb_partants = float(row.get('Nb_Partants', 16))
-    if corde > 0 and nb_partants > 0:
-        score += 10 if corde <= nb_partants / 3 else (6 if corde <= nb_partants * 2 / 3 else 3)
-    else:
-        score += 5
-
-    # 9. COTE (5 pts)
+    # 12. COTE (10 pts)
     cote = float(row.get('Cote', 0.0))
     if cote > 0:
         score_cote = 100 if cote <= 3 else (80 if cote <= 6 else (60 if cote <= 10 else (40 if cote <= 20 else 20)))
-        score += (score_cote / 100) * 5
+        score += (score_cote / 100) * 10
     else:
-        score += 2.5
+        score += 5
     
     return round(min(100, max(0, score)), 1)
 
