@@ -272,9 +272,11 @@ for (h, d, c), stats in dict_corde.items():
     key = (h, c)
     if key not in dict_corde_hippo:
         dict_corde_hippo[key] = {'courses': 0, 'victoires': 0, 'podiums': 0}
+    
     dict_corde_hippo[key]['courses'] += stats['courses']
-    dict_corde_hippo[key]['victoires'] += stats['victoires']
-    dict_corde_hippo[key]['podiums'] += stats['podiums']
+    # On recalcule les victoires/podiums à partir des taux car ils ne sont pas stockés en brut
+    dict_corde_hippo[key]['victoires'] += stats['courses'] * stats['taux_victoire'] / 100
+    dict_corde_hippo[key]['podiums'] += stats['courses'] * stats['taux_podium'] / 100
 
 for key in dict_corde_hippo:
     s = dict_corde_hippo[key]
