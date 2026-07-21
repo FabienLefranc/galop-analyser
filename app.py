@@ -521,13 +521,67 @@ def calculer_score_ameliore(row, df_global, df_course):
     else:
         score += 3
 
-    # 8. CORDE (8 pts)
-    stats = dict_corde.get((hippo_actuel, dist_groupe, int(corde_actuelle)), {})
-    if stats.get('courses', 0) >= 5:
-        s = (stats['taux_podium'] * 0.6 + stats['taux_victoire'] * 0.4) / 100 * 8
-        score += s * min(1.0, stats['courses'] / 10)
+    # ==========================================
+    # 8. CORDE (8 pts) - NOUVEAU : Analyse contextuelle (Hippo + Distance + Partants)
+    # ==========================================
+    nb_partants = float(row.get('Nb_Partants', 16))
+    
+    # Niveau 1 : Stats exactes (Hippo + Distance + Corde)
+    stats_corde_exact = dict_corde.get((hippo_actuel, dist_groupe, int(corde_actuelle)), {})
+    
+    # Niveau 2 : Fallback sur (Hippo + Corde) si pas assez de données
+    stats_corde_hippo = None
+    for (h, d, c), s in dict_corde.items():
+        if h == hippo_actuel and c == int(corde_actuelle) and s['courses'] >= 3:
+            if stats_corde_hippo is None or s['courses'] > stats_corde_hippo['courses']:
+                stats_corde_hippo = s
+    
+    # Niveau 3 : Fallback sur (Distance + Corde)
+    stats_corde_dist = None
+    for (h, d, c), s in dict_corde.items():
+        if d == dist_groupe and c == int(corde_actuelle) and s['courses'] >= 3:
+            if stats_corde_dist is None or s['courses'] > stats_corde_dist['courses']:
+                stats_corde_dist = s
+    
+    # Sélection des stats les plus pertinentes
+    if stats_corde_exact.get('courses', 0) >= 5:
+        stats_utilisees = stats_corde_exact
+        source = "exacte"
+    elif stats_corde_hippo and stats_corde_hippo['courses'] >= 5:
+        stats_utilisees = stats_corde_hippo
+        source = "hippo"
+    elif stats_corde_dist and stats_corde_dist['courses'] >= 5:
+        stats_utilisees = stats_corde_dist
+        source = "distance"
     else:
-        score += 4
+        stats_utilisees = None
+        source = "aucune"
+    
+    # Attribution des points
+    if stats_utilisees:
+        # Calcul du score basé sur le taux de victoire/podium
+        s = (stats_utilisees['taux_podium'] * 0.6 + stats_utilisees['taux_victoire'] * 0.4) / 100 * 8
+        score += s * min(1.0, stats_utilisees['courses'] / 10)
+    else:
+        # Pas de données : on utilise une logique basique adaptée au nombre de partants
+        if nb_partants <= 10:
+            # Petite course : la corde importe moins
+            if corde_actuelle <= 3:
+                score += 6
+            elif corde_actuelle <= 6:
+                score += 4
+            else:
+                score += 2
+        else:
+            # Grande course : la corde extérieure est très pénalisante
+            if corde_actuelle <= 4:
+                score += 7
+            elif corde_actuelle <= 8:
+                score += 4
+            elif corde_actuelle <= 12:
+                score += 2
+            else:
+                score += 0
 
     # ==========================================
     # 9. POIDS (8 pts) - NOUVEAU : Comparaison avec le poids habituel
