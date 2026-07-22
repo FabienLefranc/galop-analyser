@@ -165,54 +165,37 @@ def load_data():
 df = load_data()
 
 # ==========================================
-# IMPORT DES COTES MANUELLES DU JOUR (Optionnel)
+# IMPORT DES COTES MANUELLES DU JOUR (Via Upload)
 # ==========================================
-date_du_jour = datetime.now().strftime("%d%m%Y")
-fichier_cotes = f"cotes_{date_du_jour}.csv"
+st.sidebar.markdown("---")
+st.sidebar.subheader("📂 Cotes du jour (Optionnel)")
+uploaded_file = st.sidebar.file_uploader("Glisse ton fichier cotes.csv ici", type=["csv"])
 
-if os.path.exists(fichier_cotes):
+if uploaded_file is not None:
     try:
-        df_cotes = pd.read_csv(fichier_cotes, sep=';', dtype={'Cote': str})
-        # Nettoyer et convertir les cotes (gère les virgules et les vides)
+        # On lit le fichier directement depuis le navigateur
+        df_cotes = pd.read_csv(uploaded_file, sep=';', dtype={'Cote': str})
         df_cotes['Cote'] = pd.to_numeric(df_cotes['Cote'].astype(str).str.replace(',', '.', regex=False), errors='coerce')
-        
-        # On garde seulement les lignes où une cote valide a été saisie (> 0)
         df_cotes_valides = df_cotes[df_cotes['Cote'] > 0]
         
         if not df_cotes_valides.empty:
-            # Fusion avec les données principales
             df = df.merge(
                 df_cotes_valides[['Hippo', 'Course', 'Num_PMU', 'Cote']],
                 on=['Hippo', 'Course', 'Num_PMU'],
                 how='left',
                 suffixes=('', '_manuelle')
             )
-            
-            # Si une cote manuelle existe, on l'utilise. Sinon, on garde l'originale (de la nuit)
             df['Cote'] = df['Cote_manuelle'].fillna(df['Cote'])
-            
-            # Nettoyage de la colonne temporaire
             if 'Cote_manuelle' in df.columns:
                 df = df.drop(columns=['Cote_manuelle'])
             
-            st.sidebar.success(f"✅ Cotes du jour importées et fusionnées !")
+            st.sidebar.success(f"✅ {len(df_cotes_valides)} cotes importées !")
         else:
-            st.sidebar.info(f"ℹ️ Fichier cotes trouvé mais colonne vide (utilisation des cotes par défaut).")
+            st.sidebar.warning("⚠️ Le fichier est vide ou pas de cotes valides.")
     except Exception as e:
-        st.sidebar.warning(f"⚠️ Erreur lecture cotes manuelles: {e}")
-
-def charger_stats(nom_fichier):
-    try:
-        return pd.read_csv(nom_fichier, sep=';', dtype={'Cheval_clean': str, 'Jockey_clean': str, 'Entraîneur_clean': str})
-    except Exception:
-        return pd.DataFrame()
-
-stats_chevaux = charger_stats('stats_chevaux.csv')
-stats_jockey = charger_stats('stats_jockey.csv')
-stats_entraineur = charger_stats('stats_entraineur.csv')
-stats_distance = charger_stats('stats_distance.csv')
-
-dict_chevaux, dict_jockey, dict_entraineur, dict_distance = {}, {}, {}, {}
+        st.sidebar.error(f"❌ Erreur de lecture : {e}")
+else:
+    st.sidebar.info("ℹ️ Pas de cotes uploadées (cotes par défaut utilisées).")
 
 # ==========================================
 # CHARGEMENT DES NOUVELLES TABLES DE STATS
