@@ -160,42 +160,42 @@ def load_data():
         return None
 
 # ==========================================
-# CHARGEMENT DES STATS ET DU MODÈLE ML
+# CHARGEMENT DES STATS (avec fallback robuste)
 # ==========================================
 df = load_data()
 
-# ==========================================
-# IMPORT DES COTES MANUELLES DU JOUR (Via Upload)
-# ==========================================
-st.sidebar.markdown("---")
-st.sidebar.subheader("📂 Cotes du jour (Optionnel)")
-uploaded_file = st.sidebar.file_uploader("Glisse ton fichier cotes.csv ici", type=["csv"])
-
-if uploaded_file is not None:
+def charger_stats(nom_fichier):
     try:
-        # On lit le fichier directement depuis le navigateur
-        df_cotes = pd.read_csv(uploaded_file, sep=';', dtype={'Cote': str})
-        df_cotes['Cote'] = pd.to_numeric(df_cotes['Cote'].astype(str).str.replace(',', '.', regex=False), errors='coerce')
-        df_cotes_valides = df_cotes[df_cotes['Cote'] > 0]
-        
-        if not df_cotes_valides.empty:
-            df = df.merge(
-                df_cotes_valides[['Hippo', 'Course', 'Num_PMU', 'Cote']],
-                on=['Hippo', 'Course', 'Num_PMU'],
-                how='left',
-                suffixes=('', '_manuelle')
-            )
-            df['Cote'] = df['Cote_manuelle'].fillna(df['Cote'])
-            if 'Cote_manuelle' in df.columns:
-                df = df.drop(columns=['Cote_manuelle'])
-            
-            st.sidebar.success(f"✅ {len(df_cotes_valides)} cotes importées !")
-        else:
-            st.sidebar.warning("⚠️ Le fichier est vide ou pas de cotes valides.")
-    except Exception as e:
-        st.sidebar.error(f"❌ Erreur de lecture : {e}")
-else:
-    st.sidebar.info("ℹ️ Pas de cotes uploadées (cotes par défaut utilisées).")
+        return pd.read_csv(nom_fichier, sep=';', dtype={'Cheval_clean': str, 'Jockey_clean': str, 'Entraîneur_clean': str})
+    except Exception:
+        return pd.DataFrame()
+
+# Chargement robuste avec fallback
+try:
+    stats_chevaux = charger_stats('stats_chevaux.csv')
+    stats_jockey = charger_stats('stats_jockey.csv')
+    stats_entraineur = charger_stats('stats_entraineur.csv')
+    stats_distance = charger_stats('stats_distance.csv')
+    
+    # Fallback : créer des DataFrames vides mais valides si les fichiers sont absents
+    if stats_chevaux.empty:
+        stats_chevaux = pd.DataFrame(columns=['Cheval_clean', 'Courses', 'Victoires', 'Podiums', 'Taux_victoire', 'Taux_podium'])
+    if stats_jockey.empty:
+        stats_jockey = pd.DataFrame(columns=['Cheval_clean', 'Jockey_clean', 'Courses', 'Victoires', 'Podiums', 'Taux_victoire', 'Taux_podium'])
+    if stats_entraineur.empty:
+        stats_entraineur = pd.DataFrame(columns=['Cheval_clean', 'Entraîneur_clean', 'Courses', 'Victoires', 'Podiums', 'Taux_victoire', 'Taux_podium'])
+    if stats_distance.empty:
+        stats_distance = pd.DataFrame(columns=['Cheval_clean', 'Distance', 'Courses', 'Victoires', 'Podiums', 'Taux_victoire', 'Taux_podium'])
+    
+    st.sidebar.success(f"✅ Stats chargées ({len(stats_chevaux)} chevaux)")
+except Exception as e:
+    st.sidebar.error(f"❌ Échec chargement stats: {e}")
+    stats_chevaux = pd.DataFrame(columns=['Cheval_clean', 'Courses', 'Victoires', 'Podiums', 'Taux_victoire', 'Taux_podium'])
+    stats_jockey = pd.DataFrame(columns=['Cheval_clean', 'Jockey_clean', 'Courses', 'Victoires', 'Podiums', 'Taux_victoire', 'Taux_podium'])
+    stats_entraineur = pd.DataFrame(columns=['Cheval_clean', 'Entraîneur_clean', 'Courses', 'Victoires', 'Podiums', 'Taux_victoire', 'Taux_podium'])
+    stats_distance = pd.DataFrame(columns=['Cheval_clean', 'Distance', 'Courses', 'Victoires', 'Podiums', 'Taux_victoire', 'Taux_podium'])
+
+dict_chevaux, dict_jockey, dict_entraineur, dict_distance = {}, {}, {}, {}
 
 # ==========================================
 # CHARGEMENT DES NOUVELLES TABLES DE STATS
@@ -292,9 +292,7 @@ for (h, d, c), stats in dict_corde.items():
     key = (h, c)
     if key not in dict_corde_hippo:
         dict_corde_hippo[key] = {'courses': 0, 'victoires': 0, 'podiums': 0}
-    
     dict_corde_hippo[key]['courses'] += stats['courses']
-    # On recalcule les victoires/podiums à partir des taux car ils ne sont pas stockés en brut
     dict_corde_hippo[key]['victoires'] += stats['courses'] * stats['taux_victoire'] / 100
     dict_corde_hippo[key]['podiums'] += stats['courses'] * stats['taux_podium'] / 100
 
@@ -337,30 +335,64 @@ for e in dict_entraineur_global:
 
 st.sidebar.success(f"✅ {len(dict_entraineur_global)} entraîneurs globaux")
 
-# Chargement du modèle Machine Learning
+# ==========================================
+# IMPORT DES COTES MANUELLES DU JOUR (Via Upload)
+# ==========================================
+st.sidebar.markdown("---")
+st.sidebar.subheader("📂 Cotes du jour (Optionnel)")
+uploaded_file = st.sidebar.file_uploader("Glisse ton fichier cotes.csv ici", type=["csv"])
+
+if uploaded_file is not None:
+    try:
+        df_cotes = pd.read_csv(uploaded_file, sep=';', dtype={'Cote': str})
+        df_cotes['Cote'] = pd.to_numeric(df_cotes['Cote'].astype(str).str.replace(',', '.', regex=False), errors='coerce')
+        df_cotes_valides = df_cotes[df_cotes['Cote'] > 0]
+        
+        if not df_cotes_valides.empty:
+            df = df.merge(
+                df_cotes_valides[['Hippo', 'Course', 'Num_PMU', 'Cote']],
+                on=['Hippo', 'Course', 'Num_PMU'],
+                how='left',
+                suffixes=('', '_manuelle')
+            )
+            df['Cote'] = df['Cote_manuelle'].fillna(df['Cote'])
+            if 'Cote_manuelle' in df.columns:
+                df = df.drop(columns=['Cote_manuelle'])
+            
+            st.sidebar.success(f"✅ {len(df_cotes_valides)} cotes importées !")
+        else:
+            st.sidebar.warning("⚠️ Le fichier est vide ou pas de cotes valides.")
+    except Exception as e:
+        st.sidebar.error(f"❌ Erreur de lecture : {e}")
+else:
+    st.sidebar.info("ℹ️ Pas de cotes uploadées (cotes par défaut utilisées).")
+
+# ==========================================
+# CHARGEMENT DU MODÈLE ML
+# ==========================================
 model_ml = None
 try:
     if os.path.exists('modele_galop_v3.json'):
         model_ml = xgb.XGBClassifier()
         model_ml.load_model('modele_galop_v3.json')
-        st.sidebar.success("✅ Modèle IA V3 chargé avec succès")
+        st.sidebar.success("✅ Modèle IA V3 chargé")
     else:
-        st.sidebar.warning("⚠️ Fichier 'modele_galop_v3.json' introuvable")
+        st.sidebar.warning("⚠️ Modèle V3 introuvable")
 except Exception as e:
-    st.sidebar.warning(f"⚠️ Erreur chargement modèle IA: {e}")
+    st.sidebar.warning(f"⚠️ Erreur chargement modèle: {e}")
 
 # ==========================================
 # FONCTIONS DE CALCUL DE SCORE
 # ==========================================
 def evaluer_confiance(proba):
     if proba >= 15.0:
-        return " FORTE (Favori du modèle)"
+        return "🔥 FORTE (Favori du modèle)"
     elif proba >= 10.0:
         return "✅ MOYENNE (Bon outsider)"
     elif proba >= 7.0:
         return "⚠️ FAIBLE (Coup de poker)"
     else:
-        return " À ÉVITER"
+        return "❌ À ÉVITER"
 
 def predire_proba_ml(row):
     if model_ml is None: 
@@ -509,13 +541,9 @@ def calculer_score_ameliore(row, df_global, df_course):
     # ANALYSE COMPLÈTE DE LA MUSIQUE (10 variables)
     stats_musique = analyser_musique(musique)
     
-    # 1.1 Victoires récentes (5 pts)
     score += min(5, stats_musique['Nb_victoires'] * 1.5)
-    
-    # 1.2 Podiums récents (4 pts)
     score += min(4, stats_musique['Nb_podiums'] * 0.8)
     
-    # 1.3 Moyenne de classement (3 pts)
     if stats_musique['Moyenne'] <= 3:
         score += 3
     elif stats_musique['Moyenne'] <= 5:
@@ -523,24 +551,20 @@ def calculer_score_ameliore(row, df_global, df_course):
     elif stats_musique['Moyenne'] <= 8:
         score += 1
     
-    # 1.4 Dernier classement (2 pts)
     if stats_musique['Dernier_classement'] <= 2:
         score += 2
     elif stats_musique['Dernier_classement'] <= 5:
         score += 1
     
-    # 1.5 Progression (1 pt)
     if stats_musique['Progression'] > 0:
         score += 1
     
-    # 1.6 Pénalité abandons/disqualifications (-2 pts max)
     incidents = stats_musique['Abandons'] + stats_musique['Disqualifications']
     score -= min(2, incidents * 0.5)
     
-    # 2. RÉGULARITÉ (5 pts)
     score += (stats_musique['Regularite'] / 10) * 5
     
-    # 3. JOCKEY (10 pts) - Avec fallback global
+    # JOCKEY avec fallback global
     stats = dict_jockey.get((cheval_nom, jockey_actuel), {})
     if stats.get('courses', 0) >= 3:
         s = (stats['taux_podium'] * 0.6 + stats['taux_victoire'] * 0.4) / 100 * 10
@@ -553,7 +577,7 @@ def calculer_score_ameliore(row, df_global, df_course):
         else:
             score += 3
 
-    # 4. ENTRAÎNEUR (10 pts) - Avec fallback global
+    # ENTRAÎNEUR avec fallback global
     stats = dict_entraineur.get((cheval_nom, entraineur_actuel), {})
     if stats.get('courses', 0) >= 3:
         s = (stats['taux_podium'] * 0.6 + stats['taux_victoire'] * 0.4) / 100 * 10
@@ -566,7 +590,7 @@ def calculer_score_ameliore(row, df_global, df_course):
         else:
             score += 3
 
-    # 5. DISTANCE (8 pts)
+    # DISTANCE
     meilleure_stats = None
     for dist_test in [dist_groupe - 200, dist_groupe, dist_groupe + 200]:
         stats = dict_distance.get((cheval_nom, dist_test))
@@ -578,7 +602,7 @@ def calculer_score_ameliore(row, df_global, df_course):
     else:
         score += 4
 
-    # 6. HIPPODROME (8 pts)
+    # HIPPODROME
     stats = dict_hippodrome.get((cheval_nom, hippo_actuel), {})
     if stats.get('courses', 0) >= 2:
         s = (stats['taux_podium'] * 0.6 + stats['taux_victoire'] * 0.4) / 100 * 8
@@ -586,7 +610,7 @@ def calculer_score_ameliore(row, df_global, df_course):
     else:
         score += 4
 
-    # 7. SURFACE (6 pts)
+    # SURFACE
     stats = dict_surface.get((cheval_nom, surface_actuelle), {})
     if stats.get('courses', 0) >= 2:
         s = (stats['taux_podium'] * 0.6 + stats['taux_victoire'] * 0.4) / 100 * 6
@@ -594,7 +618,7 @@ def calculer_score_ameliore(row, df_global, df_course):
     else:
         score += 3
 
-    # 8. CORDE (8 pts) - Avec fallbacks
+    # CORDE avec fallback
     nb_partants = float(row.get('Nb_Partants', 16))
     
     stats_corde_exact = dict_corde.get((hippo_actuel, dist_groupe, int(corde_actuelle)), {})
@@ -628,7 +652,7 @@ def calculer_score_ameliore(row, df_global, df_course):
             else:
                 score += 0
 
-    # 9. POIDS (8 pts) - Comparaison avec le poids habituel
+    # POIDS comparé au poids habituel
     historique_cheval = df_global[df_global['Cheval_clean'] == cheval_nom]
     
     if not historique_cheval.empty:
@@ -647,7 +671,7 @@ def calculer_score_ameliore(row, df_global, df_course):
     else:
         score += 0
 
-    # 10. GAINS (12 pts) - Efficacité et Potentiel
+    # GAINS par course
     gains = float(row.get('Gains_Car', 0))
     age = float(row.get('Âge', 5))
     nb_courses = dict_chevaux.get(cheval_nom, {}).get('courses', 1)
@@ -678,7 +702,7 @@ def calculer_score_ameliore(row, df_global, df_course):
     if age <= 4 and gains_par_course >= moyenne_gains_pc_race * 0.3:
         score += 2
 
-    # 11. COTE (12 pts)
+    # COTE
     cote = float(row.get('Cote', 0.0))
     if cote > 0:
         score_cote = 100 if cote <= 3 else (80 if cote <= 6 else (60 if cote <= 10 else (40 if cote <= 20 else 20)))
@@ -695,7 +719,7 @@ if 'selected_date' not in st.session_state: st.session_state.selected_date = Non
 if 'selected_reu' not in st.session_state: st.session_state.selected_reu = None
 if 'selected_course' not in st.session_state: st.session_state.selected_course = None
 
-st.title(" Galop Analyzer")
+st.title("🏇 Galop Analyzer")
 st.markdown("---")
 
 if df is None or df.empty:
@@ -703,9 +727,9 @@ if df is None or df.empty:
     st.stop()
 
 st.sidebar.header("🎯 Navigation")
-page = st.sidebar.radio("Choisir une vue :", ["📊 Tableau de bord", "📋 Résumé du jour", "🏆 Analyse d'une course", "🐎 Statistiques chevaux", "🎯 Score prédictif", " Recherche cheval"])
+page = st.sidebar.radio("Choisir une vue :", [" Tableau de bord", "📋 Résumé du jour", "🏆 Analyse d'une course", " Statistiques chevaux", "🎯 Score prédictif", "🔍 Recherche cheval"])
 
-if st.session_state.selected_date and st.sidebar.button("🗑️ Effacer la sélection"):
+if st.session_state.selected_date and st.sidebar.button("️ Effacer la sélection"):
     st.session_state.selected_date = st.session_state.selected_reu = st.session_state.selected_course = None
     st.rerun()
 
@@ -737,7 +761,7 @@ elif page == "📋 Résumé du jour":
         dates_valides = [d for d in df["Date"].unique() if isinstance(d, str) and len(d) == 8]
         date_alt = st.selectbox("Autre date :", sorted(dates_valides, reverse=True))
         courses_du_jour = df[df["Date"] == date_alt]
-        st.write(f" Courses trouvées pour {date_alt} : {len(courses_du_jour)}")
+        st.write(f"📊 Courses trouvées pour {date_alt} : {len(courses_du_jour)}")
     else:
         st.success(f"✅ {len(courses_du_jour)} partants trouvés pour le {date_du_jour}")
         courses_list = courses_du_jour.groupby(["Réu", "Course", "Hippo", "Dist"]).size().reset_index()
@@ -812,7 +836,7 @@ elif page == "📋 Résumé du jour":
             
             csv = recap_df.to_csv(index=False, sep=';')
             st.download_button(
-                label=" Télécharger le résumé en CSV",
+                label="📥 Télécharger le résumé en CSV",
                 data=csv,
                 file_name=f"resume_{date_du_jour}.csv",
                 mime="text/csv"
@@ -829,12 +853,12 @@ elif page == "📋 Résumé du jour":
                         distance_affichee = course_data.iloc[0]['Distance']
                         st.markdown(f"**{distance_affichee}** - {course_num}")
                         
-                        st.markdown("####  Top 3 Score Classique")
+                        st.markdown("#### 📊 Top 3 Score Classique")
                         col1, col2, col3 = st.columns(3)
                         data_score = course_data[course_data["Type"] == "Score"].sort_values("Rang")
                         for i, (_, row) in enumerate(data_score.head(3).iterrows()):
                             with [col1, col2, col3][i]:
-                                medal = ["🥇", "🥈", "🥉"][i]
+                                medal = ["🥇", "", "🥉"][i]
                                 st.metric(f"{medal} N°{int(row['Num'])} {row['Cheval']}", f"Score: {row['Score']}")
                         
                         st.markdown("#### 🤖 Top 3 IA")
@@ -842,7 +866,7 @@ elif page == "📋 Résumé du jour":
                         data_ia = course_data[course_data["Type"] == "IA"].sort_values("Rang")
                         for i, (_, row) in enumerate(data_ia.head(3).iterrows()):
                             with [col1, col2, col3][i]:
-                                medal = ["🥇", "", "🥉"][i]
+                                medal = ["🥇", "🥈", "🥉"][i]
                                 st.metric(f"{medal} N°{int(row['Num'])} {row['Cheval']}", f"Proba: {row['Proba_Norm']:.1f}%")
                         
                         st.markdown("#### 🎯 Top 3 Score Combiné")
@@ -850,7 +874,7 @@ elif page == "📋 Résumé du jour":
                         data_combine = course_data[course_data["Type"] == "Combine"].sort_values("Rang")
                         for i, (_, row) in enumerate(data_combine.head(3).iterrows()):
                             with [col1, col2, col3][i]:
-                                medal = ["🥇", "", "🥉"][i]
+                                medal = ["🥇", "🥈", "🥉"][i]
                                 st.metric(f"{medal} N°{int(row['Num'])} {row['Cheval']}", f"Combine: {row['Score_Combine']}")
                         
                         st.markdown("---")
@@ -866,7 +890,7 @@ elif page == "🏆 Analyse d'une course":
     else:
         index_defaut = 0
     
-    date_sel = st.selectbox(" Date :", dates_valides, index=index_defaut)
+    date_sel = st.selectbox("📅 Date :", dates_valides, index=index_defaut)
     courses_df = df[df["Date"] == date_sel].groupby(["Réu", "Course", "Hippo", "Dist"]).size().reset_index(name='count')
     courses_df["label"] = courses_df.apply(lambda x: f"{x['Hippo']} - R{x['Réu']}C{x['Course']} ({x['Dist']}m)", axis=1)
     course_label = st.selectbox("🏇 Course :", courses_df["label"])
@@ -878,10 +902,10 @@ elif page == "🏆 Analyse d'une course":
         st.markdown("---")
         st.dataframe(parts[["Num_PMU", "Cheval", "Poids", "Corde", "Cote", "Gains_Car"]], use_container_width=True)
 
-elif page == "🐎 Statistiques chevaux":
-    st.header("🐎 Statistiques des chevaux")
+elif page == " Statistiques chevaux":
+    st.header(" Statistiques des chevaux")
     if st.session_state.selected_date is None:
-        st.warning("⚠️ Va d'abord dans **🏆 Analyse d'une course** !")
+        st.warning("️ Va d'abord dans **🏆 Analyse d'une course** !")
     else:
         parts = df[(df["Date"] == str(st.session_state.selected_date)) & (df["Réu"] == int(st.session_state.selected_reu)) & (df["Course"] == int(st.session_state.selected_course))]
         if not parts.empty:
@@ -912,14 +936,14 @@ elif page == "🎯 Score prédictif":
             parts = parts.sort_values("Score_Combine", ascending=False)
             parts["Rang"] = range(1, len(parts)+1)
             
-            st.subheader(" Classement")
+            st.subheader("🏆 Classement")
             st.dataframe(parts[["Rang", "Num_PMU", "Cheval", "Score_Combine", "Confiance", "Proba_Norm", "Musique"]], use_container_width=True)
             
             fig = px.bar(parts, x="Cheval", y="Score", color="Score", color_continuous_scale="Viridis")
             st.plotly_chart(fig, use_container_width=True)
 
 elif page == "🔍 Recherche cheval":
-    st.header(" Recherche un cheval")
+    st.header("🔍 Recherche un cheval")
     search = st.text_input("Nom du cheval :")
     if search:
         search_clean = search.upper().strip()
