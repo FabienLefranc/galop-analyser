@@ -164,6 +164,43 @@ def load_data():
 # ==========================================
 df = load_data()
 
+# ==========================================
+# IMPORT DES COTES MANUELLES DU JOUR (Optionnel)
+# ==========================================
+date_du_jour = datetime.now().strftime("%d%m%Y")
+fichier_cotes = f"cotes_{date_du_jour}.csv"
+
+if os.path.exists(fichier_cotes):
+    try:
+        df_cotes = pd.read_csv(fichier_cotes, sep=';', dtype={'Cote': str})
+        # Nettoyer et convertir les cotes (gère les virgules et les vides)
+        df_cotes['Cote'] = pd.to_numeric(df_cotes['Cote'].astype(str).str.replace(',', '.', regex=False), errors='coerce')
+        
+        # On garde seulement les lignes où une cote valide a été saisie (> 0)
+        df_cotes_valides = df_cotes[df_cotes['Cote'] > 0]
+        
+        if not df_cotes_valides.empty:
+            # Fusion avec les données principales
+            df = df.merge(
+                df_cotes_valides[['Hippo', 'Course', 'Num_PMU', 'Cote']],
+                on=['Hippo', 'Course', 'Num_PMU'],
+                how='left',
+                suffixes=('', '_manuelle')
+            )
+            
+            # Si une cote manuelle existe, on l'utilise. Sinon, on garde l'originale (de la nuit)
+            df['Cote'] = df['Cote_manuelle'].fillna(df['Cote'])
+            
+            # Nettoyage de la colonne temporaire
+            if 'Cote_manuelle' in df.columns:
+                df = df.drop(columns=['Cote_manuelle'])
+            
+            st.sidebar.success(f"✅ Cotes du jour importées et fusionnées !")
+        else:
+            st.sidebar.info(f"ℹ️ Fichier cotes trouvé mais colonne vide (utilisation des cotes par défaut).")
+    except Exception as e:
+        st.sidebar.warning(f"⚠️ Erreur lecture cotes manuelles: {e}")
+
 def charger_stats(nom_fichier):
     try:
         return pd.read_csv(nom_fichier, sep=';', dtype={'Cheval_clean': str, 'Jockey_clean': str, 'Entraîneur_clean': str})
